@@ -2,6 +2,7 @@ package utils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 public class Choice {
 
@@ -35,37 +36,28 @@ public class Choice {
 
         private static final String LIST_EMPTY_ = "Перечень команд пока ещё пуст.";
 
-        public static Command get(String string) {
-            if (Command.isEmpty())
-                return null;
 
-            if (!Data.isCorrect(string)
-                    || string.equalsIgnoreCase("exit")
-                    || string.equalsIgnoreCase("выход"))
-                return SHUTDOWN;
-
-            for (Command command :
-                    Command.values()) {
-                if (string.equals(Integer.toString(command.number))
-                        || command.name().equalsIgnoreCase(string)
-                        || command.title.equalsIgnoreCase(string))
-                    return command;
-            }
-
-            return null;
+        public static Command request(String ask, Command... commands) {
+            return request(null, ask, commands);
         }
 
-        public static Command byNumber(int number) {
-            if (Command.isEmpty() || number < 0 || number > Command.values().length - 1)
+        public static Command request(String message, String ask, Command... commands) {
+            if (!Data.isCorrect(commands))
                 return null;
 
-            for (Command command :
-                    Command.values()) {
-                if (command.number == number)
-                    return command;
-            }
+            System.out.println();
 
-            return null;
+            if (Data.isCorrect(message))
+                System.out.println("\n" + message);
+            Text.printList(list(commands), Text.PrintModes.SIMPLE_LIST_PM, ask);
+
+            Command command = null;
+            try {
+                command = get(new Scanner(System.in).nextLine());
+            } catch (Exception e) {
+                Text.printException(e);
+            }
+            return command;
         }
 
         public static String[] list() {
@@ -96,7 +88,27 @@ public class Choice {
                 return new String[]{LIST_EMPTY_};
         }
 
-        private static Command[] getAll() {
+        public static Command get(String string) {
+            if (Command.isEmpty())
+                return null;
+
+            if (!Data.isCorrect(string)
+                    || string.equalsIgnoreCase("exit")
+                    || string.equalsIgnoreCase("выход"))
+                return SHUTDOWN;
+
+            for (Command command :
+                    Command.values()) {
+                if (string.equals(Integer.toString(command.number))
+                        || command.name().equalsIgnoreCase(string)
+                        || command.title.equalsIgnoreCase(string))
+                    return command;
+            }
+
+            return null;
+        }
+
+        public static Command[] getAll() {
             return getSelected(Command.values());
         }
 
@@ -162,6 +174,7 @@ public class Choice {
         public void execute() {
             switch (this) {
                 case ADD:
+
                     break;
                 case GET:
                     break;
