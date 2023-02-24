@@ -1,10 +1,57 @@
 package utils;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Scanner;
 
 public class Data {
+
+    //  requests
+    public static LocalDate dateRequest(String ask) {
+        int year = requestInt("Укажи год:");
+        int month = requestInt("Укажи месяц:");
+        int day = requestInt("Укажи день месяца:");
+        LocalDate date;
+        if (year > 0 && month > 0 && day > 0)
+            date = LocalDate.of(year, month, day);
+        else date = null;
+
+        return date;
+    }
+
+    public static int requestInt() {
+        return requestInt(null);
+    }
+
+    public static int requestInt(String ask) {
+        if (Data.isCorrect(ask))
+            System.out.println(ask);
+
+        try {
+            return Math.abs(Integer.parseInt(request()));
+        } catch (Exception e) {
+            System.out.println("Вводимое значение должно быть числом.");
+            return requestInt(ask);
+        }
+    }
+
+    public static String request() {
+        return request(null);
+    }
+
+    public static String request(String ask) {
+        if (Data.isCorrect(ask))
+            System.out.println(ask);
+
+        try {
+            Scanner scanner = new Scanner(System.in);
+            return scanner.nextLine();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     //  correctParameters
     public static boolean isCorrect(String parameter) {
