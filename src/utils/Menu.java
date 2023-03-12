@@ -1,7 +1,6 @@
 package utils;
 
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 
 import utils.Commands.*;
 
@@ -27,26 +26,26 @@ public class Menu {
 
 
     public void show() {
+        if (!Data.isCorrect(commands))
+            return;
+
+        Commands.reassignOrdinal(commands);
         Command command;
+
         do {
-            if (!Data.isCorrect(commands))
-                return;
-
             System.out.println();
-
             if (Data.isCorrect(message))
                 System.out.println("\n" + message);
-
-            Text.printList(Commands.toStrings(this), Text.PrintModes.SIMPLE_LIST_PM, title);
+            Text.printList(title, Commands.toStrings(this), Text.PrintMode.SIMPLE);
 
             command = Command.request();
 
             if (command == null)
                 System.out.println("\n" + CommandException.UNKNOWN_COMMAND_);
-            else if (command != Command.SHUTDOWN)
+            else if (command != Command.CANCEL)
                 command.execute();
 
-        } while (command != Command.SHUTDOWN);
+        } while (command != Command.CANCEL);
     }
 
 
@@ -72,7 +71,7 @@ public class Menu {
 
     public final void setCommands(Command... commands) {
         if (!Data.isCorrect(commands))
-            this.commands = new HashMap<>(Map.of(Command.SHUTDOWN.getOrdinalNumber(), Command.SHUTDOWN));
+            this.commands = new HashMap<>(Map.of(Command.CANCEL.getOrdinalNumber(), Command.CANCEL));
 
         else {
             this.commands = new HashMap<>();
@@ -86,6 +85,13 @@ public class Menu {
 
         if (this.commands == null)
             this.commands = new HashMap<>();
+
+        else {
+            List<Command> newCommandList = new ArrayList<>(List.of(this.commands.values().toArray(new Command[0])));
+            newCommandList.addAll(List.of(commands));
+            Command[] fullList = newCommandList.toArray(new Command[0]);
+            Commands.reassignOrdinal(fullList);
+        }
 
         for (Command command :
                 commands) {

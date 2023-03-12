@@ -1,57 +1,9 @@
 package utils;
 
-import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.*;
 
-public class Data {
+public class Data extends Request {
 
-    //  requests
-    public static LocalDate dateRequest(String ask) {
-        int year = requestInt("Укажи год:");
-        int month = requestInt("Укажи месяц:");
-        int day = requestInt("Укажи день месяца:");
-        LocalDate date;
-        if (year > 0 && month > 0 && day > 0)
-            date = LocalDate.of(year, month, day);
-        else date = null;
-
-        return date;
-    }
-
-    public static int requestInt() {
-        return requestInt(null);
-    }
-
-    public static int requestInt(String ask) {
-        if (Data.isCorrect(ask))
-            System.out.println(ask);
-
-        try {
-            return Math.abs(Integer.parseInt(request()));
-        } catch (Exception e) {
-            System.out.println("Вводимое значение должно быть числом.");
-            return requestInt(ask);
-        }
-    }
-
-    public static String request() {
-        return request(null);
-    }
-
-    public static String request(String ask) {
-        if (Data.isCorrect(ask))
-            System.out.println(ask);
-
-        try {
-            Scanner scanner = new Scanner(System.in);
-            return scanner.nextLine();
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     //  correctParameters
     public static boolean isCorrect(String parameter) {
@@ -67,7 +19,7 @@ public class Data {
     }
 
     public static <T> boolean isCorrect(T[] array) {
-        return array != null && getNotNullObjectsNumber(array) > 0;
+        return array != null && notNullObjectsNumber(array) > 0;
     }
 
     //  notNullObjects
@@ -84,7 +36,7 @@ public class Data {
         return lastNotNullObjectIndex;
     }
 
-    public static int getNotNullObjectsNumber(Object[] objects) {
+    public static int notNullObjectsNumber(Object[] objects) {
         if (objects == null) return 0;
         int numberOfNNObjects = objects.length;
         for (Object curObj :
@@ -95,7 +47,7 @@ public class Data {
     }
 
     public static <T> T[] getNotNullObjects(T[] objects) {
-        int numberOfNNObjects = getNotNullObjectsNumber(objects);
+        int numberOfNNObjects = notNullObjectsNumber(objects);
         if (numberOfNNObjects < 1) return null;
         T[] nnObjects = Arrays.copyOf(objects, numberOfNNObjects);
         int validObjectIndex = -1;
@@ -105,7 +57,7 @@ public class Data {
         return nnObjects;
     }
 
-    public static int getNotNullObjectsNumber(Object[][] objects) {
+    public static int notNullObjectsNumber(Object[][] objects) {
         if (objects == null) return 0;
         int numberOfNNObjects = 0;
         for (Object[] curOneDimArray :
@@ -121,13 +73,13 @@ public class Data {
     }
 
     public static <T> T[][] getNotNullObjects(T[][] twoDimArray) {
-        int numberOfNNObjects = getNotNullObjectsNumber(twoDimArray);
+        int numberOfNNObjects = notNullObjectsNumber(twoDimArray);
         if (numberOfNNObjects <= 0) return null;
         int nnObjectsArrayLenth = 0;
         T[][] nnObjects = Arrays.copyOf(twoDimArray, nnObjectsArrayLenth);
         for (T[] curOneDimArray :
                 twoDimArray) {
-            int numberOfOneDimArrayNNObjects = getNotNullObjectsNumber(curOneDimArray);
+            int numberOfOneDimArrayNNObjects = notNullObjectsNumber(curOneDimArray);
             if (numberOfOneDimArrayNNObjects > 0) {
                 nnObjects = Arrays.copyOf(nnObjects, nnObjectsArrayLenth + 1);
                 nnObjects[nnObjectsArrayLenth++] = getNotNullObjects(curOneDimArray);

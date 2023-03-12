@@ -3,7 +3,6 @@ package utils;
 import java.util.*;
 
 import planner.Journal;
-import planner.Task;
 
 public abstract class Commands {
 
@@ -20,10 +19,11 @@ public abstract class Commands {
         }
     }
 
-    public static final List<String> SHUTDOWN_COMMANDS_NAMES_
-            = new ArrayList<>(List.of("SHUTDOWN", "EXIT", "QUIT", "ВЫХОД"));
+    public static final String[] CANCEL_COMMAND_NAMES_ = {"CANCEL", "QUIT", "EXIT", "SHUTDOWN"};
+    public static final String[] CANCEL_COMMAND_ALTER_NAMES_ = {"Выход", "Завершение работы"};
+
     private static final String UNKNOWN_ = "<не указано>";
-    private static final String SHUTDOWN_ = "Завершение работы";
+    private static final String CANCEL_ = "Отмена";
     private static final String LIST_EMPTY_ = "Перечень команд пока ещё пуст.";
 
     public enum Command {
@@ -36,23 +36,26 @@ public abstract class Commands {
         ADD("Добавить задачу"),
         SBD("Показать задачи по календарному дню", "Show by day"),
         REN("Переименовать задачу", "Rename"),
+        REPL("Заменить", "Replace"),
         DEL("Удалить задачу", "Delete"),
         SHALL("Показать все задачи", "Show all"),
         SHOW("Показать все сведения по определённой задаче"),
-        SHUTDOWN(SHUTDOWN_);
+        TEST("проверка"),
+        CANCEL(CANCEL_);
 
         public static Command request() {
             return get(new Scanner(System.in).nextLine());
         }
 
         public static Command get(String string) {
-            if (isEmpty())
+            if (isEmpty() || string == null)
                 return null;
 
             if (!Data.isCorrect(string)
-                    || string.equalsIgnoreCase("exit")
-                    || string.equalsIgnoreCase("выход"))
-                return SHUTDOWN;
+                    || CANCEL.getTitle().equalsIgnoreCase(string)
+                    || Arrays.toString(CANCEL_COMMAND_NAMES_).toLowerCase().contains(string.toLowerCase())
+                    || Arrays.toString(CANCEL_COMMAND_ALTER_NAMES_).toLowerCase().contains(string.toLowerCase()))
+                return CANCEL;
 
             for (Command command :
                     Command.values()) {
@@ -79,7 +82,7 @@ public abstract class Commands {
             if (Data.isCorrect(title))
                 this.title = title;
             else if (Command.values().length < 2)
-                this.title = SHUTDOWN_;
+                this.title = CANCEL_;
             else this.title = UNKNOWN_;
 
             this.translate = translate;
@@ -89,45 +92,31 @@ public abstract class Commands {
 
 
         public final void execute() {
-            Task task1;
-            Task task1_1;
-            Task task2;
-            Task task3;
-            Task task4;
-            String title1 = "Задача 1";
-            String title2 = "Задача 01";
             try {
                 switch (this) {
                     case ADD:
-                        task1 = new Task(title1);
-                        task1_1 = new Task(title1);
-                        task2 = new Task("Задача 546");
-                        task3 = new Task("");
-                        task4 = new Task("Вообще не задача");
-                        System.out.println("task1 = " + task1 + "; id = " + task1.getId());
-                        Journal.show();
+                        Journal.newTask();
                         break;
                     case SBD:
-                        Journal.showTasks(Journal.selection(Data.dateRequest("\nПо какому дню следует показать задачи?")));
+                        Journal.showTasks(Journal.selection(Request.date("\nПо какому дню следует показать задачи?")));
                         break;
                     case REN:
-                        //  ? сопоставлять Задачи по Заголовку и Времени или по ИД
-                        task1 = new Task(title1);
-                        task1.setTitle(title2);
-                        System.out.println("task1 = " + task1 + "; id = " + task1.getId());
-                        Journal.show();
+                        Journal.renTask();
                         break;
                     case SHALL:
                         Journal.show();
                         break;
                     case SHOW:
-                        Journal.showTasks(Journal.selection(Data.request("\nПо какой задаче следует вывести сведения?" +
-                                "\n(следует указать порядковый номер либо заголовок)")));
+                        Journal.showByTaskPointer();
                         break;
                     case DEL:
+                        Journal.delTask();
+                        break;
+                    case TEST:
+                        Journal.test();
                         break;
                     default:
-                        System.out.println("\n" + CommandException.UNKNOWN_COMMAND_);
+                        throw new CommandException(CommandException.UNKNOWN_COMMAND_);
                 }
             } catch (CommandException e) {
                 Text.printException(e, "Ошибка выполнения команды");
@@ -136,17 +125,7 @@ public abstract class Commands {
 
 
         public final String ordinalString() {
-            StringBuilder string = new StringBuilder(Integer.toString(ordinalNumber));
-            string.append(". ").append(title).append(" [").append(name().toLowerCase()).append("]");
-            if (this == SHUTDOWN)
-                string.replace(string.length() - (this.name().length() + 2), string.length(),
-                        Arrays.toString(SHUTDOWN_COMMANDS_NAMES_.toArray()).toLowerCase());
-//                string.replace(string.length() - 1, string.length(), " / exit / выход]");
-
-            if (Data.isCorrect(translate))
-                string.append(" {").append(translate).append("}");
-
-            return string.toString();
+            return ordinalNumber + ". " + this;
         }
 
         public final String getTitle() {
@@ -170,8 +149,52 @@ public abstract class Commands {
                 this.ordinalNumber = 1;
             else
                 this.ordinalNumber = Command.values().length;
-            if (SHUTDOWN_COMMANDS_NAMES_.contains(this.name()))
+            if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()))
                 this.ordinalNumber = 0;
+        }
+
+        private final void setOrdinalNumber(int number) {
+            if (number > 0)
+                this.ordinalNumber = number;
+
+            if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()))
+                this.ordinalNumber = 0;
+        }
+
+        @Override
+        public final String toString() {
+            StringBuilder string = new StringBuilder(title);
+
+            if (this == CANCEL)
+                string.append(" (").append(Arrays.toString(CANCEL_COMMAND_ALTER_NAMES_)
+                        .replace("[", "").replace("]", "")).append(")");
+
+            string.append(" [").append(name().toLowerCase()).append("]");
+
+            if (this == CANCEL)
+                string.replace(string.length() - (this.name().length() + 2), string.length(),
+                        Arrays.toString(CANCEL_COMMAND_NAMES_).toLowerCase());
+
+            if (Data.isCorrect(translate))
+                string.append(" {").append(translate).append("}");
+
+            return string.toString();
+        }
+    }
+
+
+    public static void reassignOrdinal(Map<Integer, Command> commands) {
+        reassignOrdinal(commands.values().toArray(new Command[0]));
+    }
+
+    public static void reassignOrdinal(Command... commands) {
+        int count = 0;
+        for (Command command :
+                commands) {
+            if (command != null)
+                if (command != Command.CANCEL)
+                    command.setOrdinalNumber(++count);
+                else command.setOrdinalNumber(0);
         }
     }
 
@@ -188,7 +211,7 @@ public abstract class Commands {
         if (!Data.isCorrect(commandMap))
             return new String[0];
 
-        int listLength = Data.getNotNullObjectsNumber(commandMap.values().toArray());
+        int listLength = Data.notNullObjectsNumber(commandMap.values().toArray());
         if (listLength < 1)
             return new String[0];
 
@@ -199,22 +222,22 @@ public abstract class Commands {
     }
 
     public static String[] toStrings(Command... commands) {
-        int length = Data.getNotNullObjectsNumber(commands);
+        int length = Data.notNullObjectsNumber(commands);
         if (length < 1)
             return new String[]{LIST_EMPTY_};
         if (length < 2)
-            return new String[]{Command.SHUTDOWN.ordinalString()};
+            return new String[]{Command.CANCEL.ordinalString()};
 
         String[] strings = new String[length];
         int index, count = 0;
         for (index = 0; index < length; ++index) {
             if (commands[index] != null) {
-                if (SHUTDOWN_COMMANDS_NAMES_.contains(commands[index].name()))
+                if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(commands[index].name()))
                     continue;
                 strings[count++] = commands[index].ordinalString();
             }
         }
-        strings[length - 1] = Command.SHUTDOWN.ordinalString();
+        strings[length - 1] = Command.CANCEL.ordinalString();
 
         return strings;
     }
@@ -227,7 +250,7 @@ public abstract class Commands {
         if (!Data.isCorrect(commands))
             return new Command[0];
 
-        int length = Data.getNotNullObjectsNumber(commands);
+        int length = Data.notNullObjectsNumber(commands);
         if (length < 1)
             return new Command[0];
 
@@ -238,19 +261,19 @@ public abstract class Commands {
         int index, count = 0;
         for (index = 0; index < commands.length - 1; ++index) {
             if (commands[index] != null) {
-                if (SHUTDOWN_COMMANDS_NAMES_.contains(commands[index].name()))
+                if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(commands[index].name()))
                     continue;
                 selected[count] = commands[index];
                 selected[count].ordinalNumber = ++count;
             }
         }
-        selected[length - 1] = Command.SHUTDOWN;
+        selected[length - 1] = Command.CANCEL;
         selected[length - 1].ordinalNumber = 0;
         return selected;
     }
 
     public static Command[] justShutdown() {
-        Command[] justShutdown = new Command[]{Command.SHUTDOWN};
+        Command[] justShutdown = new Command[]{Command.CANCEL};
         justShutdown[0].ordinalNumber = 0;
         return justShutdown;
     }

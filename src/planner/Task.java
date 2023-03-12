@@ -1,6 +1,6 @@
 package planner;
 
-import java.util.Map;
+import java.time.Duration;
 import java.util.Objects;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -10,33 +10,43 @@ import utils.Commands;
 import utils.Data;
 import utils.Commands.CommandException;
 import utils.Text;
-import utils.Time.Period;
-import utils.Time.Period.PeriodType;
+import utils.Time;
 
 public class Task {
 
     public enum Status {
-        ACTUAL("действующее"),
-        EXPIRED("просроченное"),
-        FROZEN("приостановленное");
+        ACTUAL("безсрочная", 2),
+        TEMPORARY("временная", 1),
+        REPEATED("повторяющаяся", TEMPORARY.ordinal),
+        EXPIRED("просрочена", 4),
+        PAUSED("приостановлена", 3);
 
         private final String title;
+        private final int ordinal;
 
-        Status(String title) {
+        Status(String title, int ordinal) {
             this.title = title;
+            this.ordinal = ordinal;
         }
 
         public String getTitle() {
             return title;
         }
+
+        public int getOrdinal() {
+            return ordinal;
+        }
     }
 
 
     private String title;
-    private final LocalDateTime creationDateTime = LocalDateTime.now();
-    private int id;
+    private final LocalDateTime creationTime = LocalDateTime.now();
+    private final int id;
+    private int ordinal;
     private LocalDate date;
     private LocalTime time;
+    private boolean defEventTimeUsing = false;
+    private boolean isRepeated = false;
     private Status status;
     private String description;
 
@@ -76,19 +86,33 @@ public class Task {
         setTitle(title);
         setDate(date);
         setTime(time);
-        setId();
+        this.id = hashCode();
         setStatus();
         setDescription(description);
     }
     //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  //
 
 
-//  »? private
-    public final void update() {
-        Map<Integer, Task> updatedJournal = Journal.getJournal();
-        updatedJournal.remove(this.getId());
-        setId();
-        updatedJournal.put(this.getId(), this);
+    public final boolean alreadyExist() {
+        return Journal.getJournal().containsKey(getId());
+    }
+
+    public void checkTime() {
+        if (date == null)
+            return;
+
+        if (isDefEventTimeUsed())
+            System.out.println("\n! Задача " + Text.aquo(getTitle()) + " назначена на " + this.date.format(Time.D_MMM_YYYY)
+                    + ";\n\t! время задачи (" + Journal.getDefEventTime().format(Time.H_MM) + ") назначено по умолчанию.");
+
+        LocalDateTime dateTime = LocalDateTime.of(date, time);
+        if (dateTime.isBefore(LocalDateTime.now()))
+            System.out.println("\n! Внимание:\n\tдля задачи " + Text.aquo(getTitle()) + " назначено уже прошедшее время - " + dateTime.format(Time.D_MMM_YYYY_H_MM) + ".");
+    }
+
+
+    public final LocalDateTime getCreationTime() {
+        return creationTime;
     }
 
     public final String getTitle() {
@@ -103,36 +127,14 @@ public class Task {
             throw new CommandException(Commands.CommandException.UNTITLED_TASK_);
 
         this.title = title;
-        update();
     }
 
     public final int getId() {
         return id;
     }
 
-    private final void setId() {
-        this.id = this.hashCode();
-    }
-
-    public final Period getRemainingTime() {
-        LocalTime now = LocalTime.now();
-
-        int period,
-                hours = this.time.getHour() - now.getHour(),
-                minutes = this.time.getMinute() - now.getMinute();
-        PeriodType periodType;
-
-        if (hours > 0) {
-            periodType = PeriodType.HOURS;
-            period = hours;
-        } else {
-            periodType = PeriodType.MINUTES;
-            period = minutes;
-        }
-
-        if (period > 0)
-            return new Period(period, periodType);
-        else return null;
+    public final LocalDateTime getDateTime() {
+        return date == null ? null : LocalDateTime.of(date, time);
     }
 
     public final LocalDate getDate() {
@@ -143,11 +145,6 @@ public class Task {
         this.date = date;
         if (date == null && this.time != null)
             this.time = null;
-
-        if (date != null && date.isBefore(LocalDate.now()))
-            System.out.println("Внимание!\nЗадача назначена на уже прошедший день.");
-
-        update();
     }
 
     public final LocalTime getTime() {
@@ -155,7 +152,7 @@ public class Task {
     }
 
     public final void setDefaultTime() {
-        setTime(null);
+        setTime(Journal.getDefEventTime());
     }
 
     public final void setTime(LocalTime time) {
@@ -165,16 +162,18 @@ public class Task {
         if (this.date == null)
             this.date = LocalDate.now();
 
-        this.time = time == null ? Journal.getDefEventTime() : time;
-
         if (time == null)
-            System.out.println("\nЗадача назначена на " + this.date + "; " +
-                    "время задачи (" + Journal.getDefEventTime() + ") назначено по умолчанию.");
+            useDefEventTime();
+        else this.time = time;
+    }
 
-        if (LocalDateTime.of(this.date, this.time).isBefore(LocalDateTime.now()))
-            System.out.println("Внимание!\nЗадача назначена на уже прошедшее время.");
+    public final boolean isDefEventTimeUsed() {
+        return defEventTimeUsing;
+    }
 
-        update();
+    public final void useDefEventTime() {
+        this.time = Journal.getDefEventTime();
+        defEventTimeUsing = true;
     }
 
     public final String getDescription() {
@@ -194,32 +193,28 @@ public class Task {
     }
 
     public final void setStatus() {
-        if (this.date == null && this.time == null
-                || (this.date != null && this.time != null && LocalDateTime.of(this.date, this.time).isAfter(LocalDateTime.now()))
-                || (this.date != null && this.time == null && this.date.isAfter(LocalDate.now()))
-                || (this.date == null && this.time != null && LocalDateTime.of(LocalDate.now(), this.time).isAfter(LocalDateTime.now())))
+        if (date == null)
             this.status = Status.ACTUAL;
 
-        else this.status = Status.EXPIRED;
+        if (date != null)
+            if (LocalDateTime.of(date, time).isBefore(LocalDateTime.now()))
+                this.status = Status.EXPIRED;
+            else this.status = Status.TEMPORARY;
 
-//  какой из них читабельнее?
-/*
-        if (this.date != null) {
-            if (this.time != null) {
-                if (LocalDateTime.of(this.date, this.time).isAfter(LocalDateTime.now()))
-                    this.status = Status.ACTUAL;
+        if (isRepeated)
+            this.status = Status.REPEATED;
+    }
 
-            } else if (this.date.isAfter(LocalDate.now()))
-                this.status = Status.ACTUAL;
+    public int getOrdinal() {
+        return ordinal;
+    }
 
-            else this.status = Status.EXPIRED;
-
-        } else this.status = Status.ACTUAL;
-*/
+    public void setOrdinal(int ordinal) {
+        this.ordinal = ordinal > 0 ? Math.abs(ordinal) : 0;
     }
 
     public final String getInfo() {
-        return Data.isCorrect(description) ? this + "\n" + description : this.toString();
+        return Data.isCorrect(description) ? this + "\n\tОписание: " + description : this.toString();
     }
 
     @Override
@@ -228,18 +223,23 @@ public class Task {
         string.append(" (");
 
         if (this.date != null) {
-            string.append(this.date);
-
-            if (this.time != null)
-                string.append(" ").append(this.time);
+            string.append(this.date.format(Time.D_MMM_YYYY)).append(" ").append(this.time.format(Time.H_MM));
 
             LocalDate today = LocalDate.now();
             LocalTime now = LocalTime.now();
 
             if (this.date.isEqual(today) && this.time.isAfter(now)) {
-                Period remainingTime = getRemainingTime();
-                if (remainingTime != null)
-                    string.append("(сегодня, через ").append(remainingTime).append(")");
+                Duration duration = Duration.between(LocalTime.now(), this.time);
+                if (!duration.isZero()) {
+                    int hours = duration.toHoursPart(),
+                            minutes = duration.toMinutesPart();
+                    string.append(" (сегодня, через ");
+                    if (hours > 0)
+                        string.append(hours).append(" час(-а/-ов) ");
+                    if (minutes > 0)
+                        string.append(minutes).append(" минут(-у/-ы))");
+                    else string.append(duration.toSecondsPart()).append(" секунд(-у/-ы))");
+                }
             }
 
             string.append("; ");
@@ -261,16 +261,15 @@ public class Task {
     }
 
     @Override
-    public final boolean equals(Object o) {
+    public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof Task)) return false;
         Task task = (Task) o;
-        return getTitle().equalsIgnoreCase(task.getTitle()) && getDescription().equalsIgnoreCase(task.getDescription())
-                && getDate() == task.getDate() && getTime() == task.getTime();
+        return getTitle().equals(task.getTitle()) && Objects.equals(getDate(), task.getDate()) && Objects.equals(getTime(), task.getTime());
     }
 
     @Override
-    public final int hashCode() {
-        return Objects.hash(creationDateTime, title, date, time);
+    public int hashCode() {
+        return Objects.hash(getTitle(), getDate(), getTime());
     }
 }

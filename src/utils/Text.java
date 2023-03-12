@@ -7,7 +7,7 @@ public class Text {
 
     protected static final String NO_DATA_TO_OUTPUT = "\nДанные для вывода отсутствуют.";
 
-    public enum PrintModes {NO_PUNCTUATION, SIMPLE_LIST_PM, BULLETED_LIST, NUMBERED_LIST_PM;}
+    public enum PrintMode {NO_PUNCT, SIMPLE, BULLETED, NUMBERED;}
 
 
     //  Quot
@@ -56,89 +56,118 @@ public class Text {
     //  Strings outputting
 
     public static void printList(Map<?, ?> map) {
-        printList(mapStrings(map), null, null);
+        printList(null, mapStrings(map), null);
     }
 
     public static void printList(Map<?, ?> map, String title) {
-        printList(mapStrings(map), null, title);
+        printList(null, mapStrings(map), null);
     }
 
-    public static void printList(Map<?, ?> map, PrintModes printModes) {
-        printList(mapStrings(map), printModes, null);
+    public static void printList(Map<?, ?> map, PrintMode printMode) {
+        printList(null, mapStrings(map), printMode);
     }
 
     public static void printList(String delimiter, Map<?, ?> map) {
-        printList(mapStrings(map, delimiter), null, null);
+        printList(null, mapStrings(map, delimiter), null);
     }
 
-    public static void printList(String delimiter, Map<?, ?> map, PrintModes printModes) {
-        printList(mapStrings(map, delimiter), printModes, null);
+    public static void printList(String delimiter, Map<?, ?> map, PrintMode printMode) {
+        printList(null, mapStrings(map, delimiter), printMode);
     }
 
-    public static void printList(String delimiter, Map<?, ?> map, String title) {
-        printList(mapStrings(map, delimiter), null, title);
+    public static void printList(String title, String delimiter, Map<?, ?> map) {
+        printList(title, mapStrings(map, delimiter), null);
     }
 
-    public static void printList(String delimiter, Map<?, ?> map, PrintModes printModes, String title) {
-        printList(mapStrings(map, delimiter), printModes, title);
+    public static void printList(String delimiter, Map<?, ?> map, PrintMode printMode, String printTitle) {
+        printList(printTitle, mapStrings(map, delimiter), printMode);
     }
 
-    public static void printList(List<?> list, PrintModes printMode) {
-        printList(list, printMode, null);
+    public static void printList(List<?> list, PrintMode printMode) {
+        printList(null, list, printMode);
     }
 
-    public static void printList(List<?> list, PrintModes printMode, String printTitle) {
-        printList(list.toArray(), printMode, printTitle);
+    public static void printList(String printTitle, List<?> list, PrintMode printMode) {
+        printList(printTitle, list.toArray(), printMode);
     }
 
     public static <A> void printList(A[] list) {
-        printList(list, null, null);
+        printList(null, list, null);
     }
 
-    public static <A> void printList(A[] list, PrintModes printModes) {
-        printList(list, printModes, null);
+    public static <A> void printList(A[] list, PrintMode printMode) {
+        printList(null, list, printMode);
     }
 
-    public static <A> void printList(A[] list, String printTitle) {
-        printList(list, null, printTitle);
+    public static <A> void printList(String printTitle, A[] list) {
+        printList(printTitle, list, null);
     }
 
-    public static <A> void printList(A[] list, PrintModes printMode, String printTitle) {
-        if (!Data.isCorrect(list)) {
+    public static <A> void printList(String printTitle, A[] list, PrintMode printMode) {
+        if (!Data.isCorrect(list = Data.getNotNullObjects(list))) {
             System.out.println(NO_DATA_TO_OUTPUT);
             return;
         }
-        if (printMode == null) {
-            printMode = PrintModes.NO_PUNCTUATION;
-        }
+
         if (Data.isCorrect(printTitle))
             System.out.println(printTitle);
-        String listItem;
-        char itemSeparator = ';';
-        int indexOfLastNotNullObject = Data.getIndexOfLastNotNullObject(list);
+
+        if (printMode == null)
+            printMode = PrintMode.NO_PUNCT;
+        char punctMark = ';';
+        StringBuilder listItem;
+        String itemString;
+
         for (int index = 0; index < list.length; index++) {
             if (list[index] != null) {
-                if (index == indexOfLastNotNullObject) {
-                    itemSeparator = '.';
+                listItem = new StringBuilder();
+                itemString = list[index].toString();
+
+                if (list[index].toString().startsWith("\t")) { // optionally
+                    itemString = itemString.replace("\t", " ");
+                    listItem.append("\t");
                 }
+
+                if (index == list.length - 1)
+                    punctMark = '.';
+
                 switch (printMode) {
-                    case SIMPLE_LIST_PM:
-                        listItem = String.format("%s%c", list[index], itemSeparator);
+                    case SIMPLE:
+                        listItem.append(itemString);
                         break;
-                    case BULLETED_LIST:
-                        listItem = String.format("* %s%c", list[index], itemSeparator);
+                    case BULLETED:
+                        listItem.append("* ").append(itemString);
                         break;
-                    case NUMBERED_LIST_PM:
-                        listItem = String.format("%d. %s%c", index + 1, list[index], itemSeparator);
+                    case NUMBERED:
+                        listItem.append(index + 1).append(itemString);
                         break;
                     default:
-                        listItem = String.format("%s", list[index]);
+                        listItem.append(itemString);
                 }
+
+                if (List.of(PrintMode.values()).contains(printMode))
+                    listItem.append(punctMark);
+
                 System.out.println(listItem);
             }
         }
     }
 
+    public static void print(int lines) {
+        print(lines, null);
+    }
+
+    public static void print(String message) {
+        print(0, message);
+    }
+
+    public static void print(int upperLines, String message) {
+        print(upperLines, message, 0);
+    }
+
+    public static void print(int upperLines, String message, int linesDown) {
+        System.out.println(Paragraph.withMargins(upperLines, message, linesDown));
+    }
 
     //  ...toStrings
 
@@ -165,7 +194,7 @@ public class Text {
 
     public static <K, V> String[] mapValuesStrings(Map<K, V> map) {
         int length = 0;
-        if (!Data.isCorrect(map) || (length = Data.getNotNullObjectsNumber(map.values().toArray())) < 1)
+        if (!Data.isCorrect(map) || (length = Data.notNullObjectsNumber(map.values().toArray())) < 1)
             return new String[0];
 
         String[] strings = new String[length];

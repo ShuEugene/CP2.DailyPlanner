@@ -1,74 +1,16 @@
 package utils;
 
-import java.util.Objects;
+import java.time.format.DateTimeFormatter;
 
 public class Time {
 
-    public static class Period {
-
-        public enum PeriodType {
-            HOURS("час(а/ов)"),
-            MINUTES("минут(а/ы)"),
-            SECOND("секунд(а/у)");
-
-            private final String title;
-
-            PeriodType(String title) {
-                this.title = title;
-            }
-
-            public final String getTitle() {
-                return title;
-            }
-        }
-
-
-        private int value;
-        private PeriodType type;
-
-
-        public Period(int value) {
-            this(value, null);
-        }
-
-        public Period(int value, PeriodType type) {
-            setValue(value);
-            setType(type);
-        }
-
-
-        public final int getValue() {
-            return value;
-        }
-
-        public final void setValue(int value) {
-            this.value = Math.abs(value);
-        }
-
-        public final PeriodType getType() {
-            return type;
-        }
-
-        public final void setType(PeriodType type) {
-            this.type = type == null ? PeriodType.SECOND : type;
-        }
-
-        @Override
-        public final String toString() {
-            return value + " " + getType();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof Period)) return false;
-            Period period = (Period) o;
-            return getValue() == period.getValue() && getType() == period.getType();
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(getValue(), getType());
-        }
-    }
+    public static final DateTimeFormatter D_MMMM_YYYY_H_MM = DateTimeFormatter.ofPattern("d MMMM yyyy H:mm");
+    public static final DateTimeFormatter D_MMM_YYYY_H_MM = DateTimeFormatter.ofPattern("d MMM yyyy H:mm");
+    public static final DateTimeFormatter D_MM_YYYY_H_MM = DateTimeFormatter.ofPattern("d.MM.yyyy H:mm");
+    public static final DateTimeFormatter D_MMMM_YYYY = DateTimeFormatter.ofPattern("d MMMM yyyy");
+    public static final DateTimeFormatter D_MMM_YYYY = DateTimeFormatter.ofPattern("d MMM yyyy");
+    public static final DateTimeFormatter DD_MM_YYYY = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    public static final DateTimeFormatter D_MM_YYYY = DateTimeFormatter.ofPattern("d.MM.yyyy");
+    public static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
+    public static final DateTimeFormatter H_MM = DateTimeFormatter.ofPattern("H:mm");
 }
