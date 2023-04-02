@@ -3,6 +3,7 @@ package utils;
 import java.util.*;
 
 import planner.Journal;
+import planner.Task;
 
 public abstract class Commands {
 
@@ -29,26 +30,34 @@ public abstract class Commands {
     public enum Command {
 //  Соглашение:
 /*
-    Команда "SHUTDOWN" ("EXIT" / "QUIT") всегда должна быть заключающей
+    Команда "CANCEL" ("SHUTDOWN" / "EXIT" / "QUIT") всегда должна быть заключающей
     (потому как логика этого перечисления всегда обнуляет её порядковый номер)
 */
 
         ADD("Добавить задачу"),
         SBD("Показать задачи по календарному дню", "Show by day"),
-        REN("Переименовать задачу", "Rename"),
+        EDIT("Поправить задачу"),
+        REN("Переименовать", "Rename"),
+        EDDATE("Изменить день", "Edit date"),
+        EDTIME("Изменить время", "Edit time"),
+        EDDESCR("Изменить описание", "Edit description"),
         REPL("Заменить", "Replace"),
         DEL("Удалить задачу", "Delete"),
         SHALL("Показать все задачи", "Show all"),
         SHOW("Показать все сведения по определённой задаче"),
-        TEST("проверка"),
+        TEST("Создать тестовые задачи"),
         CANCEL(CANCEL_);
 
         public static Command request() {
-            return get(new Scanner(System.in).nextLine());
+            return request(Command.values());
         }
 
-        public static Command get(String string) {
-            if (isEmpty() || string == null)
+        public static Command request(Command[] commands) {
+            return get(new Scanner(System.in).nextLine(), commands);
+        }
+
+        public static Command get(String string, Command[] commands) {
+            if (noCommands() || string == null)
                 return null;
 
             if (!Data.isCorrect(string)
@@ -58,7 +67,7 @@ public abstract class Commands {
                 return CANCEL;
 
             for (Command command :
-                    Command.values()) {
+                    commands) {
                 if (string.equals(Integer.toString(command.ordinalNumber))
                         || command.name().equalsIgnoreCase(string)
                         || command.getTitle().equalsIgnoreCase(string)
@@ -92,7 +101,23 @@ public abstract class Commands {
 
 
         public final void execute() {
+            execute(null);
+        }
+
+        public final Task execute(Task operated) {
             try {
+                switch (this) {
+                    case REN:
+                    case EDDATE:
+                    case EDTIME:
+                    case EDDESCR:
+                    case DEL:
+                        if (operated == null)
+                            operated = Journal.requestTaskPointer(Journal.ENTER_THE_TASKPOINTER);
+                        if (operated == null)
+                            return null;
+                }
+
                 switch (this) {
                     case ADD:
                         Journal.newTask();
@@ -100,8 +125,20 @@ public abstract class Commands {
                     case SBD:
                         Journal.showTasks(Journal.selection(Request.date("\nПо какому дню следует показать задачи?")));
                         break;
+                    case EDIT:
+                        Journal.editTask();
+                        break;
                     case REN:
-                        Journal.renTask();
+                        operated = Journal.renTask(operated);
+                        break;
+                    case EDDATE:
+                        operated = Journal.editTaskDate(operated);
+                        break;
+                    case EDTIME:
+                        operated = Journal.editTaskDayTime(operated);
+                        break;
+                    case EDDESCR:
+                        operated = Journal.editTaskDescr(operated);
                         break;
                     case SHALL:
                         Journal.show();
@@ -110,17 +147,21 @@ public abstract class Commands {
                         Journal.showByTaskPointer();
                         break;
                     case DEL:
-                        Journal.delTask();
+                        Journal.delTask(operated);
                         break;
                     case TEST:
-                        Journal.test();
+                        Journal.createTasksSet();
                         break;
                     default:
                         throw new CommandException(CommandException.UNKNOWN_COMMAND_);
                 }
             } catch (CommandException e) {
                 Text.printException(e, "Ошибка выполнения команды");
+                return null;
             }
+
+            Journal.sort();
+            return operated;
         }
 
 
@@ -145,7 +186,7 @@ public abstract class Commands {
         }
 
         private final void setOrdinalNumber() {
-            if (isEmpty())
+            if (noCommands())
                 this.ordinalNumber = 1;
             else
                 this.ordinalNumber = Command.values().length;
@@ -278,7 +319,7 @@ public abstract class Commands {
         return justShutdown;
     }
 
-    private static boolean isEmpty() {
+    private static boolean noCommands() {
         try {
             return Command.values().length == 0;
         } catch (Exception e) {

@@ -2,10 +2,13 @@ package utils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Year;
 import java.util.*;
 
 public class Request {
     public static final String INCORRECT_VALUE = "Введённое значение не соответствует допустимому.";
+    public static final String ENTER_DAYTIME = "Введите время (в формате - час:минута):";
+    public static final String ENTER_YEARDAY = "Введите день (в формате - день.месяц.год):";
     private static final String[][] CONFIRM_POINTERS = {
             {"да", "нет"}, {"yes", "no"},
             {"д", "н"}, {"y", "n"},
@@ -100,6 +103,8 @@ public class Request {
                 time = LocalTime.parse(timeString, Time.H_MM);
 
             } catch (Exception e) {
+                if (!Data.isCorrect(timeString))
+                    return null;
                 try {
                     time = LocalTime.parse(timeString, Time.HH_MM);
                 } catch (Exception ex) {
@@ -132,21 +137,19 @@ public class Request {
         String dateString = null;
         LocalDate date = null;
         while (date == null) {
+            final String YEAR_UoM = Data.isCorrect(Time.YEAR_UoM) ? " " + Time.YEAR_UoM : "";
             try {
-                if (Data.isCorrect(ask))
-                    System.out.println(ask);
-
-                dateString = string();
+                dateString = string(ask);
                 if (!Data.isCorrect(dateString) || dateString.equals("0"))
                     return null;
 
-                date = LocalDate.parse(dateString, Time.D_MM_YYYY);
+                date = LocalDate.parse(dateString + YEAR_UoM, Time.D_MM_YYYY);
 
             } catch (Exception e) {
+                if (!Data.isCorrect(dateString))
+                    return null;
                 try {
-                    if (!Data.isCorrect(dateString))
-                        return null;
-                    date = LocalDate.parse(dateString, Time.DD_MM_YYYY);
+                    date = LocalDate.parse(dateString + YEAR_UoM, Time.DD_MM_YYYY);
                 } catch (Exception ex) {
                     Text.print(1, INCORRECT_VALUE);
                 }

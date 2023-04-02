@@ -6,6 +6,10 @@ public class Data extends Request {
 
 
     //  correctParameters
+    public static boolean isCorrect(StringBuilder parameter) {
+        return parameter != null && !parameter.toString().isBlank() && !parameter.toString().isEmpty();
+    }
+
     public static boolean isCorrect(String parameter) {
         return parameter != null && !parameter.isBlank() && !parameter.isEmpty();
     }

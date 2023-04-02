@@ -2,6 +2,7 @@ package utils;
 
 import java.util.*;
 
+import planner.Task;
 import utils.Commands.*;
 
 public class Menu {
@@ -26,6 +27,10 @@ public class Menu {
 
 
     public void show() {
+        show(null);
+    }
+
+    public void show(Task operated) {
         if (!Data.isCorrect(commands))
             return;
 
@@ -38,12 +43,12 @@ public class Menu {
                 System.out.println("\n" + message);
             Text.printList(title, Commands.toStrings(this), Text.PrintMode.SIMPLE);
 
-            command = Command.request();
+            command = Command.request(commands.values().toArray(new Command[0]));
 
             if (command == null)
                 System.out.println("\n" + CommandException.UNKNOWN_COMMAND_);
             else if (command != Command.CANCEL)
-                command.execute();
+                operated = command.execute(operated);
 
         } while (command != Command.CANCEL);
     }

@@ -103,7 +103,7 @@ public class Task {
 
         if (isDefEventTimeUsed())
             System.out.println("\n! Задача " + Text.aquo(getTitle()) + " назначена на " + this.date.format(Time.D_MMM_YYYY)
-                    + ";\n\t! время задачи (" + Journal.getDefEventTime().format(Time.H_MM) + ") назначено по умолчанию.");
+                    + ";\n\t! время задачи (" + Journal.getDefEventDayTime().format(Time.H_MM) + ") назначено по умолчанию.");
 
         LocalDateTime dateTime = LocalDateTime.of(date, time);
         if (dateTime.isBefore(LocalDateTime.now()))
@@ -134,7 +134,7 @@ public class Task {
     }
 
     public final LocalDateTime getDateTime() {
-        return date == null ? null : LocalDateTime.of(date, time);
+        return (date == null || time == null) ? null : LocalDateTime.of(date, time);
     }
 
     public final LocalDate getDate() {
@@ -152,7 +152,7 @@ public class Task {
     }
 
     public final void setDefaultTime() {
-        setTime(Journal.getDefEventTime());
+        setTime(Journal.getDefEventDayTime());
     }
 
     public final void setTime(LocalTime time) {
@@ -172,12 +172,14 @@ public class Task {
     }
 
     public final void useDefEventTime() {
-        this.time = Journal.getDefEventTime();
+        this.time = Journal.getDefEventDayTime();
         defEventTimeUsing = true;
     }
 
     public final String getDescription() {
-        return "\"" + description + "\"";
+        if (!Data.isCorrect(description))
+            description = "";
+        return Data.isCorrect(description) ? "\"" + description + "\"" : description;
     }
 
     public final void setDescription(String description) {
@@ -214,7 +216,9 @@ public class Task {
     }
 
     public final String getInfo() {
-        return Data.isCorrect(description) ? this + "\n\tОписание: " + description : this.toString();
+        return Data.isCorrect(description) ?
+                this + "\n\tОписание: " + description
+                : this.toString();
     }
 
     @Override
@@ -255,9 +259,8 @@ public class Task {
         return getId() == task.getId();
     }
 
-    public final boolean simpleEquals(Task task) {
-        return getTitle().equalsIgnoreCase(task.getTitle())
-                && getDate() == task.getDate() && getTime() == task.getTime();
+    public final boolean identical(Task task) {
+        return idEquals(task) && Objects.equals(this.getDescription(), task.getDescription());
     }
 
     @Override
@@ -265,11 +268,11 @@ public class Task {
         if (this == o) return true;
         if (!(o instanceof Task)) return false;
         Task task = (Task) o;
-        return getTitle().equals(task.getTitle()) && Objects.equals(getDate(), task.getDate()) && Objects.equals(getTime(), task.getTime());
+        return idEquals(task);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getTitle(), getDate(), getTime());
+        return Objects.hash(getTitle().toLowerCase(), getDate(), getTime());
     }
 }
