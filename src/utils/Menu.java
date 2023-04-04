@@ -76,7 +76,7 @@ public class Menu {
 
     public final void setCommands(Command... commands) {
         if (!Data.isCorrect(commands))
-            this.commands = new HashMap<>(Map.of(Command.CANCEL.getOrdinalNumber(), Command.CANCEL));
+            this.commands = new HashMap<>(Map.of(Command.CANCEL.getOrdinal(), Command.CANCEL));
 
         else {
             this.commands = new HashMap<>();
@@ -101,7 +101,7 @@ public class Menu {
         for (Command command :
                 commands) {
             if (command != null)
-                this.commands.put(command.getOrdinalNumber(), command);
+                this.commands.put(command.getOrdinal(), command);
         }
     }
 }

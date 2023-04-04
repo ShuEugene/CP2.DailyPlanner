@@ -7,8 +7,10 @@ import java.util.*;
 
 public class Request {
     public static final String INCORRECT_VALUE = "Введённое значение не соответствует допустимому.";
-    public static final String ENTER_DAYTIME = "Введите время (в формате - час:минута):";
-    public static final String ENTER_YEARDAY = "Введите день (в формате - день.месяц.год):";
+    public static final String ENTER_DAYTIME = "Укажите время (в формате - час:минута):";
+    public static final String ENTER_YEARDAY = "Укажите календарный день (в формате - день.месяц.год):" +
+            "\n(можно использовать слова \"сегодня\", \"завтра\" и т.п.)";
+    public static final String OR_CANCEL = "\n(или нажмите «Enter» для отмены)";
     private static final String[][] CONFIRM_POINTERS = {
             {"да", "нет"}, {"yes", "no"},
             {"д", "н"}, {"y", "n"},
@@ -142,6 +144,18 @@ public class Request {
                 dateString = string(ask);
                 if (!Data.isCorrect(dateString) || dateString.equals("0"))
                     return null;
+                switch (dateString.toLowerCase()) {
+                    case "позавчера":
+                        return LocalDate.now().minusDays(2);
+                    case "вчера":
+                        return LocalDate.now().minusDays(1);
+                    case "сегодня":
+                        return LocalDate.now();
+                    case "завтра":
+                        return LocalDate.now().plusDays(1);
+                    case "послезавтра":
+                        return LocalDate.now().plusDays(2);
+                }
 
                 date = LocalDate.parse(dateString + YEAR_UoM, Time.D_MM_YYYY);
 

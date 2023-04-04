@@ -16,9 +16,9 @@ public class Main {
 
         Journal.MAIN_MENU.show();
 
-//        Journal.newTask();
-//        Task[] tasks = Journal.getJournal().values().toArray(new Task[0]);
-//        Arrays.sort(tasks, Journal.ORD);
-//        Text.printList(Journal.taskList(tasks), Text.PrintModes.SIMPLE_LIST_PM, "\nTaskList:");
+//        Journal.createTasksSet();
+//        Journal.showTasks(Journal.getPersTasks());
+//        Journal.showTasks(Journal.getBusiTasks());
     }
+
 }

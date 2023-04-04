@@ -24,7 +24,7 @@ public abstract class Commands {
     public static final String[] CANCEL_COMMAND_ALTER_NAMES_ = {"Выход", "Завершение работы"};
 
     private static final String UNKNOWN_ = "<не указано>";
-    private static final String CANCEL_ = "Отмена";
+    private static final String CANCEL_ = "Отмена", CANCELT_ = "Cancel";
     private static final String LIST_EMPTY_ = "Перечень команд пока ещё пуст.";
 
     public enum Command {
@@ -35,17 +35,16 @@ public abstract class Commands {
 */
 
         ADD("Добавить задачу"),
-        SBD("Показать задачи по календарному дню", "Show by day"),
         EDIT("Поправить задачу"),
         REN("Переименовать", "Rename"),
-        EDDATE("Изменить день", "Edit date"),
-        EDTIME("Изменить время", "Edit time"),
-        EDDESCR("Изменить описание", "Edit description"),
-        REPL("Заменить", "Replace"),
-        DEL("Удалить задачу", "Delete"),
-        SHALL("Показать все задачи", "Show all"),
-        SHOW("Показать все сведения по определённой задаче"),
-        TEST("Создать тестовые задачи"),
+        CHANGET("Сменить Тип", "Change type"),
+        EDDATE("Изменить День напоминания", "Edit date"),
+        EDTIME("Изменить Время напоминания", "Edit time"),
+        EDDESCR("Изменить Описание", "Edit description"),
+        DELETE("Удалить задачу"),
+        SHOW("Показать задачи", "Show tasks"),
+        SHOWTI("Cведения по задаче", "Show task info"),
+        TEST("Создать тестовые экземпляры задач"),
         CANCEL(CANCEL_);
 
         public static Command request() {
@@ -68,7 +67,7 @@ public abstract class Commands {
 
             for (Command command :
                     commands) {
-                if (string.equals(Integer.toString(command.ordinalNumber))
+                if (string.equals(Integer.toString(command.ordinal))
                         || command.name().equalsIgnoreCase(string)
                         || command.getTitle().equalsIgnoreCase(string)
                         || command.getTranslate().equalsIgnoreCase(string))
@@ -80,7 +79,7 @@ public abstract class Commands {
 
 
         private final String title, translate;
-        private int ordinalNumber;
+        private int ordinal;
 
 
         Command(String title) {
@@ -88,15 +87,13 @@ public abstract class Commands {
         }
 
         Command(String title, String translate) {
-            if (Data.isCorrect(title))
-                this.title = title;
-            else if (Command.values().length < 2)
-                this.title = CANCEL_;
-            else this.title = UNKNOWN_;
+            this.ordinal = Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()) ? 0 : ordinal() + 1;
 
-            this.translate = translate;
+            this.title = ordinal == 0 ? CANCEL_
+                    : Data.isCorrect(title) ? title : "<команда " + ordinal + ">";
 
-            setOrdinalNumber();
+            this.translate = ordinal == 0 ? CANCELT_
+                    : Data.isCorrect(translate) ? translate : ""/*"<command " + ordinal + ">"*/;
         }
 
 
@@ -111,7 +108,12 @@ public abstract class Commands {
                     case EDDATE:
                     case EDTIME:
                     case EDDESCR:
-                    case DEL:
+                    case DELETE:
+                        if (!Data.isCorrect(Journal.tempJournal(Journal.showMode(), Journal.targetDay()))) {
+                            System.out.println(Journal.IS_EMPTY);
+                            return null;
+                        }
+
                         if (operated == null)
                             operated = Journal.requestTaskPointer(Journal.ENTER_THE_TASKPOINTER);
                         if (operated == null)
@@ -122,14 +124,14 @@ public abstract class Commands {
                     case ADD:
                         Journal.newTask();
                         break;
-                    case SBD:
-                        Journal.showTasks(Journal.selection(Request.date("\nПо какому дню следует показать задачи?")));
-                        break;
                     case EDIT:
                         Journal.editTask();
                         break;
                     case REN:
                         operated = Journal.renTask(operated);
+                        break;
+                    case CHANGET:
+                        Journal.changeTaskType(operated);
                         break;
                     case EDDATE:
                         operated = Journal.editTaskDate(operated);
@@ -138,15 +140,15 @@ public abstract class Commands {
                         operated = Journal.editTaskDayTime(operated);
                         break;
                     case EDDESCR:
-                        operated = Journal.editTaskDescr(operated);
-                        break;
-                    case SHALL:
-                        Journal.show();
+                        Journal.editTaskDescr(operated);
                         break;
                     case SHOW:
-                        Journal.showByTaskPointer();
+                        Journal.show();
                         break;
-                    case DEL:
+                    case SHOWTI:
+                        Journal.showTaskInfo();
+                        break;
+                    case DELETE:
                         Journal.delTask(operated);
                         break;
                     case TEST:
@@ -166,7 +168,7 @@ public abstract class Commands {
 
 
         public final String ordinalString() {
-            return ordinalNumber + ". " + this;
+            return ordinal + ". " + this;
         }
 
         public final String getTitle() {
@@ -181,25 +183,12 @@ public abstract class Commands {
             return translate;
         }
 
-        public final int getOrdinalNumber() {
-            return ordinalNumber;
+        public final int getOrdinal() {
+            return ordinal;
         }
 
-        private final void setOrdinalNumber() {
-            if (noCommands())
-                this.ordinalNumber = 1;
-            else
-                this.ordinalNumber = Command.values().length;
-            if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()))
-                this.ordinalNumber = 0;
-        }
-
-        private final void setOrdinalNumber(int number) {
-            if (number > 0)
-                this.ordinalNumber = number;
-
-            if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()))
-                this.ordinalNumber = 0;
+        private final void setOrdinal(int number) {
+            this.ordinal = Arrays.toString(CANCEL_COMMAND_NAMES_).contains(this.name()) ? 0 : number;
         }
 
         @Override
@@ -234,8 +223,8 @@ public abstract class Commands {
                 commands) {
             if (command != null)
                 if (command != Command.CANCEL)
-                    command.setOrdinalNumber(++count);
-                else command.setOrdinalNumber(0);
+                    command.setOrdinal(++count);
+                else command.setOrdinal(0);
         }
     }
 
@@ -305,17 +294,17 @@ public abstract class Commands {
                 if (Arrays.toString(CANCEL_COMMAND_NAMES_).contains(commands[index].name()))
                     continue;
                 selected[count] = commands[index];
-                selected[count].ordinalNumber = ++count;
+                selected[count].ordinal = ++count;
             }
         }
         selected[length - 1] = Command.CANCEL;
-        selected[length - 1].ordinalNumber = 0;
+        selected[length - 1].ordinal = 0;
         return selected;
     }
 
     public static Command[] justShutdown() {
         Command[] justShutdown = new Command[]{Command.CANCEL};
-        justShutdown[0].ordinalNumber = 0;
+        justShutdown[0].ordinal = 0;
         return justShutdown;
     }
 

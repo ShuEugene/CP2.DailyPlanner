@@ -1,6 +1,8 @@
 package planner;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -10,6 +12,7 @@ import utils.Commands;
 import utils.Data;
 import utils.Commands.CommandException;
 import utils.Text;
+import utils.Text.WordForm;
 import utils.Time;
 
 public class Task {
@@ -38,6 +41,88 @@ public class Task {
         }
     }
 
+    public enum Type {
+        PERSONAL("личная"),
+        BUSINESS("деловая");
+
+        public static Type get(String string) {
+            if (!Data.isCorrect(string))
+                return null;
+            Type[] types = Type.values();
+            if (!Data.isCorrect(types))
+                return null;
+
+            for (Type type :
+                    types) {
+                if (type != null && (string.equals(Integer.toString(type.ordinal))
+                        || string.equalsIgnoreCase(type.title) || string.equalsIgnoreCase(type.pfTitle)))
+                    return type;
+            }
+
+            return null;
+        }
+
+        public static String[] numList() {
+            return numList(null);
+        }
+
+        public static String[] numList(WordForm titleForm) {
+            Type[] types = Type.values();
+            if (!Data.isCorrect(types))
+                return new String[0];
+
+            String[] numList = new String[Data.notNullObjectsNumber(types)];
+            int index = 0;
+            for (Type type :
+                    types) {
+                if (type != null)
+                    numList[index++] = type.ordinal + ". "
+                            + (titleForm == WordForm.PLURAL ? type.pfTitle() : type.toString());
+            }
+
+            return numList;
+        }
+
+        public static List<String> titles() {
+            return titles(null);
+        }
+
+        public static List<String> titles(Text.WordForm titleForm) {
+            if (!Data.isCorrect(Type.values()))
+                return new ArrayList<>();
+
+            List<String> titles = new ArrayList<>();
+            for (Type type :
+                    Type.values()) {
+                if (type != null)
+                    titles.add(titleForm == WordForm.PLURAL ? type.pfTitle() : type.title);
+            }
+
+            return titles;
+        }
+
+        private final String title, pfTitle;
+        private final int ordinal;
+
+        Type(String title) {
+            this.ordinal = ordinal() + 1;
+            this.title = Data.isCorrect(title) ? title : "<тип " + ordinal + ">";
+            this.pfTitle = title.replace("ая", "ые");
+        }
+
+        public final int ord() {
+            return ordinal;
+        }
+
+        public final String pfTitle() {
+            return pfTitle == null ? "" : pfTitle;
+        }
+
+        @Override
+        public final String toString() {
+            return title;
+        }
+    }
 
     private String title;
     private final LocalDateTime creationTime = LocalDateTime.now();
@@ -49,10 +134,11 @@ public class Task {
     private boolean isRepeated = false;
     private Status status;
     private String description;
+    private Type type;
 
     //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  //
     public Task(String title) throws CommandException {
-        this(title, null, null, null);
+        this(title, null, null, null, null);
     }
 
     public Task(String title, String description) throws CommandException {
@@ -67,6 +153,10 @@ public class Task {
         this(title, null, time, null);
     }
 
+    public Task(String title, Type type) throws CommandException {
+        this(title, type, null, null, null);
+    }
+
     public Task(String title, LocalTime time, String description) throws CommandException {
         this(title, null, time, description);
     }
@@ -79,11 +169,20 @@ public class Task {
         this(title, date, time, null);
     }
 
+    public Task(String title, Type type, LocalDate date, LocalTime time) throws CommandException {
+        this(title, type, date, time, null);
+    }
+
     public Task(String title, LocalDate date, LocalTime time, String description) throws CommandException {
+        this(title, null, date, time, description);
+    }
+
+    public Task(String title, Type type, LocalDate date, LocalTime time, String description) throws CommandException {
         if (!Data.isCorrect(title))
             throw new CommandException(Commands.CommandException.UNTITLED_TASK_);
 
         setTitle(title);
+        setType(type);
         setDate(date);
         setTime(time);
         this.id = hashCode();
@@ -216,15 +315,21 @@ public class Task {
     }
 
     public final String getInfo() {
-        return Data.isCorrect(description) ?
-                this + "\n\tОписание: " + description
-                : this.toString();
+        return Data.isCorrect(description) ? this + "\n\tОписание: " + description : this.toString();
+    }
+
+    public final Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type == null ? Type.PERSONAL : type;
     }
 
     @Override
     public final String toString() {
         StringBuilder string = new StringBuilder(Text.aquo(getTitle()));
-        string.append(" (");
+        string.append(" (").append(getType()).append("; ");
 
         if (this.date != null) {
             string.append(this.date.format(Time.D_MMM_YYYY)).append(" ").append(this.time.format(Time.H_MM));

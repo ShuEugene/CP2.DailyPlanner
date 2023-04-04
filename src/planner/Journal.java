@@ -10,23 +10,30 @@ import utils.*;
 import utils.Sortable.SortMode;
 import utils.Commands.*;
 
+import planner.Task.Type;
+
 public abstract class Journal {
 
     //    Menus
-    public static final Menu MAIN_MENU = new Menu("Что предпринять?",
-            Command.ADD, Command.SBD, Command.EDIT, Command.DEL, Command.SHALL, Command.SHOW, Command.TEST, Command.CANCEL);
-    public static final Menu ED_MENU = new Menu("~ Правка задачи ~" + "\nЧто предпринять?",
-            Command.REN, Command.EDDATE, Command.EDTIME, Command.EDDESCR, Command.CANCEL);
+    public static final Menu MAIN_MENU = new Menu("\t* Работа с Ежедневником *" + "\nЧто предпринять?",
+            Command.ADD, Command.EDIT, Command.DELETE, Command.SHOWTI, Command.SHOW, Command.TEST, Command.CANCEL);
+    public static final Menu ED_MENU = new Menu("\t~ Правка задачи ~" + "\nЧто предпринять?",
+            Command.REN, Command.CHANGET, Command.EDDATE, Command.EDTIME, Command.EDDESCR, Command.CANCEL);
 
     private static final String TASK_NUMBER_NOT_FOUND = "Ошибка поиска: использованный номер задачи в Журнале отсутствует.";
-    public static final String ENTER_THE_TASKPOINTER = "Введите номер или название (заголовок) задачи:";
-    private static final String IS_EMPTY = "Журнал задач пуст; записи о задачах отсутствуют.";
+    public static final String ENTER_THE_TASKPOINTER = "Введите номер или название (заголовок) задачи:" + Request.OR_CANCEL;
+    public static final String IS_EMPTY = "Журнал задач пуст; записи о задачах отсутствуют.";
     private static final String NO_MATCHES_FOUND = "\nCовпадений не найдено.";
     private static final String MATCHES_FOUND = "\nНайдено несколько совпадений:";
     private static final String CHOOSE_REQUIRED = "Выбери, пожалуйста, требуемое:";
 
     private static LocalTime defEventDayTime = LocalTime.of(9, 0, 0);
+    private static Map<Integer, Task> tempJournal = getJournal();
+    private static Type showMode = null;
+    private static LocalDate targetDay = null;
     private static Map<Integer, Task> journal = new HashMap<>();
+    private static Map<Integer, Task> persTasks = new HashMap<>();
+    private static Map<Integer, Task> busiTasks = new HashMap<>();
     private static int taskCount = 0;
 
     //  Comparators
@@ -92,8 +99,8 @@ public abstract class Journal {
     private static SortMode defSortMode = SortMode.ASC;
 
 
-    public static void showByTaskPointer() {
-        if (!Data.isCorrect(getJournal())) {
+    public static void showTaskInfo() {
+        if (!Data.isCorrect(tempJournal(showMode, targetDay))) {
             System.out.println(IS_EMPTY);
             return;
         }
@@ -120,10 +127,69 @@ public abstract class Journal {
     }
 
     public static void show(SortMode sortMode) {
-        if (Data.isCorrect(getJournal()))
-            showTasks("\n\tПолный перечень задач:", journal, sortMode);
+        targetDay = Request.date(Request.ENTER_YEARDAY.substring(0, Request.ENTER_YEARDAY.length() - 1)
+                + Request.OR_CANCEL.replace("\n(", " ")
+                .replace("отмены", "отображения полного перечня задач"));
+
+        String[] taskTypesNumList = Type.numList(Text.WordForm.PLURAL),
+                allItems = Arrays.copyOf(taskTypesNumList, taskTypesNumList.length + 1);
+        allItems[taskTypesNumList.length] = "0. Все";
+
+        String showModeStr;
+        do {
+            do {
+                Text.printList("\nВыберите тип задач, которые следует показать:" + Request.OR_CANCEL, allItems, Text.PrintMode.SIMPLE);
+                showModeStr = Request.string();
+                if (!Data.isCorrect(showModeStr))
+                    return;
+                if (showModeStr.equals("0")) {
+                    showMode = null;
+                    break;
+                }
+                showMode = Type.get(showModeStr);
+                if (showMode == null)
+                    System.out.println("Указанный тип отсутствует.");
+            } while (showMode == null);
+
+            String taskType;
+            if (showMode == null)
+                taskType = "Все";
+            else {
+                taskType = showMode.pfTitle();
+                taskType = taskType.replace(Character.toString(taskType.charAt(0)), (Character.toString(taskType.charAt(0)).toUpperCase()));
+            }
+
+            if (Data.isCorrect(tempJournal(showMode, targetDay)))
+                showTasks("\n" + "v".repeat(75) + "\n\t" + taskType + " задачи:", tempJournal, sortMode);
+            else
+                System.out.println(IS_EMPTY);
+
+        } while (Request.confirm("\nПоказать другие задачи?"));
+    }
+
+    public static Map<Integer, Task> tempJournal(Type showMode) {
+        return tempJournal(showMode, null);
+    }
+
+    public static Map<Integer, Task> tempJournal(Type showMode, LocalDate targetDay) {
+        if (showMode == null)
+            tempJournal = getJournal();
         else
-            System.out.println(IS_EMPTY);
+            switch (showMode) {
+                case PERSONAL:
+                    tempJournal = getPersTasks();
+                    break;
+                case BUSINESS:
+                    tempJournal = getBusiTasks();
+                    break;
+                default:
+                    tempJournal = getJournal();
+            }
+
+        if (targetDay != null)
+            tempJournal = selection(targetDay, tempJournal);
+
+        return tempJournal;
     }
 
     public static void showTasks(Map<Integer, Task> journal) {
@@ -169,6 +235,28 @@ public abstract class Journal {
         return list;
     }
 
+
+    //  дописать changeTaskType
+    public static void changeTaskType(Task edited) {
+        if (edited == null)
+            return;
+
+        Type newType = null;
+        String typeStr;
+        while (newType == null) {
+            typeStr = Request.string("\nВыберите новый тип задачи:" + Request.OR_CANCEL);
+            if (!Data.isCorrect(typeStr))
+                return;
+            newType = Type.get(typeStr);
+            if (newType == null)
+                System.out.println("Данный тип не известен.");
+        }
+
+        tempJournal(edited.getType(), targetDay).remove(edited.getId());
+        edited.setType(newType);
+        tempJournal(newType, targetDay).put(edited.getId(), edited);
+    }
+
     public static void editTask() {
         Task edited = requestTaskPointer(ENTER_THE_TASKPOINTER);
         if (edited == null)
@@ -177,11 +265,10 @@ public abstract class Journal {
         ED_MENU.show(edited);
     }
 
-    public static Task editTaskDescr(Task edited) {
+    public static void editTaskDescr(Task edited) {
         if (edited == null)
-            return null;
+            return;
         edited.setDescription(Request.string("Введите новое описание:"));
-        return edited;
     }
 
     public static Task editTaskDayTime(Task edited) {
@@ -199,7 +286,7 @@ public abstract class Journal {
             newDate = LocalDate.now();
 
         LocalTime newDayTime = Request.time(Request.ENTER_DAYTIME.replace("время", "новое время напоминания")
-                + "\n(или «Enter» - для отмены)");
+                + Request.OR_CANCEL);
         StringBuilder message = new StringBuilder("Время напоминания ");
         LocalTime oldDayTime = edited.getTime();
         LocalDateTime oldTime = edited.getDateTime();
@@ -238,8 +325,8 @@ public abstract class Journal {
 
         LocalDateTime oldTime = edited.getDateTime();
 
-        LocalDate newDate = Request.date(Request.ENTER_YEARDAY.replaceFirst("день", "новый день напоминания") +
-                "\n(или нажмите «Enter» для его обнуления)");
+        LocalDate newDate = Request.date(Request.ENTER_YEARDAY.replaceFirst("календарный день", "новый день напоминания") +
+                Request.OR_CANCEL.replace("отмены", "его обнуления"));
         LocalTime newDayTime = null;
         LocalDateTime newTime;
 
@@ -247,7 +334,7 @@ public abstract class Journal {
         if (newDate != null) {
             if (Request.confirm("Желаете изменить время напоминания:"))
                 newDayTime = Request.time(Request.ENTER_DAYTIME.replace("время", "новое время напоминания")
-                        + "\n(или «Enter» - для отмены)");
+                        + Request.OR_CANCEL);
             newTime = newDayTime == null ? LocalDateTime.of(newDate, edited.getTime()) : LocalDateTime.of(newDate, newDayTime);
 
             Task firstMatch = firstMatch(edited, newTime);
@@ -300,6 +387,13 @@ public abstract class Journal {
         return newTask;
     }
 
+    private static boolean applyChanges(String message, Task oldTask, Task newTask, String ask) {
+        Text.printList(message, new String[]{
+                "\tуже существующая задача: " + oldTask.getInfo(),
+                "\tдобавляемая задача: " + newTask.getInfo()}, Text.PrintMode.BULLETED);
+        return Request.confirm(ask);
+    }
+
     public static void delTask() {
         delTask(null);
     }
@@ -310,6 +404,14 @@ public abstract class Journal {
 
         if (deleted != null)
             try {
+                switch (deleted.getType()) {
+                    case PERSONAL:
+                        getPersTasks().remove(deleted.getId());
+                        break;
+                    case BUSINESS:
+                        getBusiTasks().remove(deleted.getId());
+                        break;
+                }
                 Journal.getJournal().remove(deleted.getId());
                 Text.print(1, "Задача " + deleted + " успешно удалена.");
             } catch (Exception e) {
@@ -317,26 +419,162 @@ public abstract class Journal {
             }
     }
 
+    //  TasksSetCreation for Test
+    public static void createTasksSet() {
+        LocalDate aug10y23 = LocalDate.of(2023, 8, 10);
+        LocalDate mar10y23 = LocalDate.of(2023, 3, 10);
+        LocalDate mar09y23 = LocalDate.of(2023, 3, 9);
+        LocalDate dec31y22 = LocalDate.of(2022, 12, 31);
+        LocalDate aug10y22 = LocalDate.of(2022, 8, 10);
+
+        LocalTime h18m00 = LocalTime.of(18, 0);
+        LocalTime h9m00 = LocalTime.of(9, 0);
+        LocalTime h7m35 = LocalTime.of(7, 35);
+        LocalTime h7m30 = LocalTime.of(7, 30);
+        LocalTime h4m30 = LocalTime.of(4, 30);
+
+        Task task1 = null, task2 = null, task3 = null, task4 = null, task5 = null, task6 = null;
+        try {
+            task1 = new Task("Задача 1", Type.BUSINESS, aug10y23, h7m30);
+            task2 = new Task("Задача 01", Type.BUSINESS, aug10y23, h7m30);
+            task3 = new Task("Задача 3", Type.BUSINESS);
+            task4 = new Task("Воооопсче не задача", mar10y23);
+            task5 = new Task("Задача 546", mar09y23, h18m00);
+            task6 = new Task("Задача 446", dec31y22, h4m30);
+        } catch (CommandException e) {
+            Text.printException(e);
+        }
+        Journal.newTask(task1, task2, task3, task4, task5, task6);
+    }
+
+    //  поправить newTask
+    public static void newTask() {
+        Type type;
+        String typeStr;
+        do {
+            Text.printList("\nВыберите один из нижеуказанных типов создаваемой задачи:" +
+                            Request.OR_CANCEL.replace("отмены", "выбора типа по умолчанию - \"личная\")"),
+                    Task.Type.numList(), Text.PrintMode.SIMPLE);
+            typeStr = Request.string();
+            if (!Data.isCorrect(typeStr)) {
+                type = Type.PERSONAL;
+                break;
+            }
+            type = Type.get(typeStr);
+            if (type == null)
+                System.out.println("Указан неизвестный мне тип.");
+        } while (type == null);
+
+        String title = Request.string("\nВведите название (заголовок) задачи:" +
+                "\n(или \"пустую строку\" - для отмены)");
+        if (!Data.isCorrect(title))
+            return;
+
+        LocalDate date = null;
+        if (Request.confirm("Назначить день напоминания?"))
+            date = Request.date("Укажите, пожалуйста, день:\n(в формате: деньМесяца.номерМесяца.год)");
+
+        LocalTime time = null;
+        if (date != null)
+            if (Request.confirm("Назначить время напоминания?" +
+                    "\n(Если не указать время, оно будет назначено по умолчанию на " + getDefEventDayTime().format(Time.H_MM) + ")"))
+                time = Request.time("Укажите, пожалуйста, время:\n(в формате: Час:Минута)");
+
+        String description = null;
+        if (Request.confirm("Желаете добавить описание задачи?"))
+            description = Request.string("Описание:");
+
+        try {
+            newTask(new Task(title, type, date, time, description));
+        } catch (CommandException e) {
+            Text.printException(e);
+        }
+    }
+
+    public static void newTask(Task... newTasks) {
+        if (!Data.isCorrect(newTasks))
+            return;
+
+        for (Task newTask :
+                newTasks) {
+            if (newTask == null)
+                continue;
+
+            if (newTask.alreadyExist())
+                if (!applyChanges("\n! Найдено сходство:",
+                        getJournal().get(newTask.getId()), newTask, "Заменить существующую задачу добавляемой?" +
+                                "\n(В случае отказа введённые данные будут утрачены.)"))
+                    continue;
+
+            journal.put(newTask.getId(), newTask);
+            newTask.checkTime();
+            newTask.setOrdinal(++taskCount);
+            sort();
+            switch (newTask.getType()) {
+                case PERSONAL:
+                    Journal.getBusiTasks().remove(newTask.getId());
+                    Journal.getPersTasks().put(newTask.getId(), newTask);
+                    break;
+                case BUSINESS:
+                    Journal.getPersTasks().remove(newTask.getId());
+                    Journal.getBusiTasks().put(newTask.getId(), newTask);
+                    break;
+            }
+        }
+    }
+
+    public static void sort() {
+        sort(tempJournal, getDefSortMode());
+    }
+
+    public static void sort(SortMode sortMode) {
+        sort(null, sortMode);
+    }
+
+    private static void sort(Map<Integer, Task> journal) {
+        sort(journal, getDefSortMode());
+    }
+
+    public static void sort(Map<Integer, Task> journal, SortMode sortMode) {
+        if (!Data.isCorrect(journal))
+            journal = getJournal();
+
+        int length = journal.size();
+        Task[] tasks = journal.values().toArray(new Task[length]);
+
+        Arrays.sort(tasks, sortMode == null ? getDefSortMode().comparator() : sortMode.comparator());
+        reassignOrdinals(tasks);
+    }
+
+    private static void reassignOrdinals(Task[] tasks) {
+        int count = 0;
+        for (Task task :
+                tasks) {
+            if (task != null)
+                task.setOrdinal(++count);
+        }
+    }
+
     private static Task replaceTask(Task replacing, String newDescription) {
-        return replaceTask(null, replacing.getTitle(), replacing, replacing.getDate(), replacing.getTime(), newDescription);
+        return replaceTask(null, replacing.getTitle(), replacing.getType(), replacing, replacing.getDate(), replacing.getTime(), newDescription);
     }
 
     //  используется?
     private static Task replaceTask(Task replaced, LocalTime newTime, Task replacing) {
-        return replaceTask(replaced, replacing.getTitle(), replacing, replacing.getDate(), newTime, replacing.getDescription());
+        return replaceTask(replaced, replacing.getTitle(), replacing.getType(), replacing, replacing.getDate(), newTime, replacing.getDescription());
     }
 
     private static Task replaceTask(Task replaced, LocalDateTime newTime, Task replacing) {
         LocalDate newDate = newTime == null ? null : newTime.toLocalDate();
         LocalTime newDayTime = newTime == null ? null : newTime.toLocalTime();
-        return replaceTask(replaced, replacing.getTitle(), replacing, newDate, newDayTime, replacing.getDescription());
+        return replaceTask(replaced, replacing.getTitle(), replacing.getType(), replacing, newDate, newDayTime, replacing.getDescription());
     }
 
     private static Task replaceTask(Task replaced, String newTitle, Task replacing) {
-        return replaceTask(replaced, newTitle, replacing, replacing.getDate(), replacing.getTime(), replacing.getDescription());
+        return replaceTask(replaced, newTitle, replacing.getType(), replacing, replacing.getDate(), replacing.getTime(), replacing.getDescription());
     }
 
-    private static Task replaceTask(Task replaced, String newTitle, Task replacing,
+    private static Task replaceTask(Task replaced, String newTitle, Type type, Task replacing,
                                     LocalDate newDate, LocalTime newDayTime, String newDescription) {
         if (replacing == null)
             return replaced;
@@ -350,14 +588,20 @@ public abstract class Journal {
             newDayTime = replacing.getTime();
 
         try {
-            newTask = new Task(newTitle, newDate, newDayTime, newDescription);
+            newTask = new Task(newTitle, type, newDate, newDayTime, newDescription);
             if (newTask.equals(replacing))
                 return replacing;
-            if (replaced != null && getJournal().containsKey(replaced.getId()))
-                journal.remove(replaced.getId());
-            journal.remove(replacing.getId());
+
+            if (replaced != null) {
+                tempJournal(replaced.getType()/*, targetDay*/).remove(replaced.getId());
+                getJournal().remove(replaced.getId());
+            }
+
+            tempJournal(replacing.getType()/*, targetDay*/).remove(replacing.getId());
+            getJournal().remove(replacing.getId());
 
             journal.put(newTask.getId(), newTask);
+            tempJournal(newTask.getType()).put(newTask.getId(), newTask);
             Journal.sort();
             return newTask;
 
@@ -417,8 +661,11 @@ public abstract class Journal {
             if (taskNumber == 0)
                 return null;
 
+            if (!Data.isCorrect(tempJournal(showMode, targetDay)))
+                return null;
+
             for (Task current :
-                    getJournal().values()) {
+                    tempJournal.values()) {
                 if (current.getOrdinal() == taskNumber || current.getTitle().equalsIgnoreCase(userChoice)) {
                     taskPointer = current;
                     break;
@@ -432,122 +679,6 @@ public abstract class Journal {
         }
 
         return taskPointer;
-    }
-
-    //  TasksSetCreation for Test
-    public static void createTasksSet() {
-        LocalDate aug10y23 = LocalDate.of(2023, 8, 10);
-        LocalDate mar10y23 = LocalDate.of(2023, 3, 10);
-        LocalDate mar09y23 = LocalDate.of(2023, 3, 9);
-        LocalDate dec31y22 = LocalDate.of(2022, 12, 31);
-        LocalDate aug10y22 = LocalDate.of(2022, 8, 10);
-
-        LocalTime h18m00 = LocalTime.of(18, 0);
-        LocalTime h9m00 = LocalTime.of(9, 0);
-        LocalTime h7m35 = LocalTime.of(7, 35);
-        LocalTime h7m30 = LocalTime.of(7, 30);
-        LocalTime h4m30 = LocalTime.of(4, 30);
-
-        Task task1 = null, task2 = null, task3 = null, task4 = null, task5 = null, task6 = null;
-        try {
-            task1 = new Task("Задача 1", aug10y23, h7m30);
-            task2 = new Task("Задача 01", aug10y23, h7m30);
-            task3 = new Task("Задача 3");
-            task4 = new Task("Воооопсче не задача", mar10y23);
-            task5 = new Task("Задача 546", mar09y23, h18m00);
-            task6 = new Task("Задача 446", dec31y22, h4m30);
-        } catch (CommandException e) {
-            Text.printException(e);
-        }
-        Journal.newTask(task1, task2, task3, task4, task5, task6);
-    }
-
-    public static void newTask() {
-        String title = Request.string("\nВведите название (заголовок) задачи:" +
-                "\n(или \"пустую строку\" - для отмены)");
-        if (!Data.isCorrect(title))
-            return;
-
-        LocalDate date = null;
-        if (Request.confirm("Назначить день напоминания?"))
-            date = Request.date("Укажите, пожалуйста, день:\n(в формате: деньМесяца.номерМесяца.год)");
-
-        LocalTime time = null;
-        if (date != null)
-            if (Request.confirm("Назначить время напоминания?" +
-                    "\n(Если не указать время, оно будет назначено по умолчанию на " + getDefEventDayTime().format(Time.H_MM) + ")"))
-                time = Request.time("Укажите, пожалуйста, время:\n(в формате: Час:Минута)");
-
-        String description = null;
-        if (Request.confirm("Желаете добавить описание задачи?"))
-            description = Request.string("Описание:");
-
-        try {
-            newTask(new Task(title, date, time, description));
-        } catch (CommandException e) {
-            Text.printException(e);
-        }
-    }
-
-    public static void newTask(Task... newTasks) {
-        if (!Data.isCorrect(newTasks))
-            return;
-
-        for (Task newTask :
-                newTasks) {
-            if (newTask == null)
-                continue;
-
-            if (newTask.alreadyExist())
-                if (!applyChanges("\n! Найдено сходство:",
-                        getJournal().get(newTask.getId()), newTask, "Заменить существующую задачу добавляемой?" +
-                                "\n(В случае отказа введёные данные будут утрачены.)"))
-                    continue;
-
-            journal.put(newTask.getId(), newTask);
-            newTask.checkTime();
-            newTask.setOrdinal(++taskCount);
-            sort();
-        }
-    }
-
-    private static boolean applyChanges(String message, Task oldTask, Task newTask, String ask) {
-        Text.printList(message, new String[]{
-                "\tуже существующая задача: " + oldTask.getInfo(),
-                "\tдобавляемая задача: " + newTask.getInfo()}, Text.PrintMode.BULLETED);
-        return Request.confirm(ask);
-    }
-
-    public static void sort() {
-        sort(null, getDefSortMode());
-    }
-
-    public static void sort(SortMode sortMode) {
-        sort(null, sortMode);
-    }
-
-    private static void sort(Map<Integer, Task> journal) {
-        sort(journal, getDefSortMode());
-    }
-
-    public static void sort(Map<Integer, Task> journal, SortMode sortMode) {
-        if (!Data.isCorrect(journal))
-            journal = getJournal();
-
-        int length = journal.size();
-        Task[] tasks = journal.values().toArray(new Task[length]);
-
-        Arrays.sort(tasks, sortMode == null ? getDefSortMode().comparator() : sortMode.comparator());
-        reassignOrdinals(tasks);
-    }
-
-    private static void reassignOrdinals(Task[] tasks) {
-        int count = 0;
-        for (Task task :
-                tasks) {
-            if (task != null)
-                task.setOrdinal(++count);
-        }
     }
 
 
@@ -585,7 +716,7 @@ public abstract class Journal {
     }
 
     public static Map<Integer, Task> selection(String taskPointer) {
-        return selection(taskPointer, new HashMap<>());
+        return selection(taskPointer, tempJournal(showMode, targetDay));
     }
 
     public static Map<Integer, Task> selection(String taskPointer, Map<Integer, Task> journal) {
@@ -624,14 +755,20 @@ public abstract class Journal {
             journal = getJournal();
 
         if (date == null)
-            return new HashMap<>();
+            return journal;
 
         Map<Integer, Task> requested = new HashMap<>();
-        int count = 0;
+        LocalDate taskDate;
         for (Task task :
                 journal.values()) {
-            if (task != null && task.getDate() == date)
-                requested.put(++count, task);
+            if (task != null/* && task.getType().equals(showMode)*/) {
+                taskDate = task.getDate();
+                if (taskDate != null && taskDate.isEqual(date)) {
+                    if (showMode != null && !showMode.equals(task.getType()))
+                        continue;
+                    requested.put(task.getId(), task);
+                }
+            }
         }
 
         return requested;
@@ -743,5 +880,21 @@ public abstract class Journal {
 
     public static void setDefSortMode(SortMode defSortMode) {
         Journal.defSortMode = defSortMode == null ? SortMode.DESC : defSortMode;
+    }
+
+    public static Map<Integer, Task> getPersTasks() {
+        return persTasks == null ? new HashMap<>() : persTasks;
+    }
+
+    public static Map<Integer, Task> getBusiTasks() {
+        return busiTasks == null ? new HashMap<>() : busiTasks;
+    }
+
+    public static Type showMode() {
+        return showMode;
+    }
+
+    public static LocalDate targetDay() {
+        return targetDay;
     }
 }

@@ -9,6 +9,7 @@ public class Text {
 
     public enum PrintMode {NO_PUNCT, SIMPLE, BULLETED, NUMBERED;}
 
+    public enum WordForm {SINGULAR, PLURAL;}
 
     //  Quot
     public static String aquo(String string) {
