@@ -1,43 +1,89 @@
 package planner;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 
-import utils.Commands;
-import utils.Data;
+import utils.*;
 import utils.Commands.CommandException;
-import utils.Text;
 import utils.Text.WordForm;
-import utils.Time;
 
 public class Task {
 
-    public enum Status {
-        ACTUAL("безсрочная", 2),
-        TEMPORARY("временная", 1),
-        REPEATED("повторяющаяся", TEMPORARY.ordinal),
-        EXPIRED("просрочена", 4),
-        PAUSED("приостановлена", 3);
+    public enum RepeatMode {
+        OFF("Не повторять"),
+        SINGLE("Однократно"),
+        DAILY("Ежедневно"),
+        WEEKLY("Еженедельно"),
+        MONTHLY("Ежемесячно"),
+        YEARLY("Ежегодно");
+
+        public static String[] numList() {
+            RepeatMode[] modes = RepeatMode.values();
+            if (!Data.isCorrect(modes))
+                return new String[0];
+
+            String[] numList = new String[modes.length];
+            int index = 0;
+            for (RepeatMode current :
+                    modes) {
+                if (current != null)
+                    numList[index++] = current.ordinal() + ". " + current.title;
+            }
+
+            return numList;
+        }
+
+        public static List<String> titles() {
+            RepeatMode[] modes = RepeatMode.values();
+            if (!Data.isCorrect(modes))
+                return new ArrayList<>();
+
+            List<String> titles = new ArrayList<>(Data.notNullObjectsNumber(modes));
+            for (RepeatMode current :
+                    modes) {
+                if (current != null)
+                    titles.add(current.title);
+            }
+
+            return titles;
+        }
+
+        public static RepeatMode get(String string) {
+            if (!Data.isCorrect(string))
+                return null;
+
+            int ordinal;
+            try {
+                ordinal = Integer.parseInt(string);
+            } catch (Exception e) {
+                ordinal = -1;
+            }
+
+            for (RepeatMode current :
+                    RepeatMode.values())
+                if (current != null)
+                    if (current.ordinal() == ordinal
+                            || string.equalsIgnoreCase(current.title) || string.equalsIgnoreCase(current.name()))
+                        return current;
+
+            return null;
+        }
+
 
         private final String title;
-        private final int ordinal;
 
-        Status(String title, int ordinal) {
+
+        RepeatMode(String title) {
             this.title = title;
-            this.ordinal = ordinal;
         }
 
-        public String getTitle() {
+
+        @Override
+        public final String toString() {
             return title;
-        }
-
-        public int getOrdinal() {
-            return ordinal;
         }
     }
 
@@ -101,7 +147,7 @@ public class Task {
             return titles;
         }
 
-        private final String title, pfTitle;
+        private final String title, pfTitle /*pluralFormTitle*/;
         private final int ordinal;
 
         Type(String title) {
@@ -124,6 +170,31 @@ public class Task {
         }
     }
 
+    public enum Status {
+        ACTUAL("безсрочная", 2),
+        TEMPORARY("временная", 1),
+        REPEATED("повторяющаяся", TEMPORARY.ordinal),
+        EXPIRED("просрочена", 4),
+        PAUSED("приостановлена", 3);
+
+        private final String title;
+        private final int ordinal;
+
+        Status(String title, int ordinal) {
+            this.title = title;
+            this.ordinal = ordinal;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public int getOrdinal() {
+            return ordinal;
+        }
+    }
+
+    private Type type;
     private String title;
     private final LocalDateTime creationTime = LocalDateTime.now();
     private final int id;
@@ -131,14 +202,16 @@ public class Task {
     private LocalDate date;
     private LocalTime time;
     private boolean defEventTimeUsing = false;
-    private boolean isRepeated = false;
-    private Status status;
+    private RepeatMode repeatMode = RepeatMode.OFF;
+    private Period period;
+    private LocalDateTime endRepeatTime;
     private String description;
-    private Type type;
+    private Status status;
 
-    //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  //
+    /*  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  */
+//  использованы?
     public Task(String title) throws CommandException {
-        this(title, null, null, null, null);
+        this(title, null, null, null, null, null);
     }
 
     public Task(String title, String description) throws CommandException {
@@ -178,6 +251,15 @@ public class Task {
     }
 
     public Task(String title, Type type, LocalDate date, LocalTime time, String description) throws CommandException {
+        this(title, type, date, time, null, description);
+    }
+
+    public Task(String title, Type type, LocalDate date, LocalTime time, RepeatMode repeatMode, String description) throws CommandException {
+        this(title, type, date, time, repeatMode, null, null, description);
+    }
+
+    public Task(String title, Type type, LocalDate date, LocalTime time,
+                RepeatMode repeatMode, Period period, LocalDateTime endRepeatTime, String description) throws CommandException {
         if (!Data.isCorrect(title))
             throw new CommandException(Commands.CommandException.UNTITLED_TASK_);
 
@@ -185,11 +267,12 @@ public class Task {
         setType(type);
         setDate(date);
         setTime(time);
+        setRepeatMode(repeatMode, period, endRepeatTime);
         this.id = hashCode();
         setStatus();
         setDescription(description);
     }
-    //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  //
+    /*  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  */
 
 
     public final boolean alreadyExist() {
@@ -200,9 +283,9 @@ public class Task {
         if (date == null)
             return;
 
-        if (isDefEventTimeUsed())
+        if (defEventTimeUsed())
             System.out.println("\n! Задача " + Text.aquo(getTitle()) + " назначена на " + this.date.format(Time.D_MMM_YYYY)
-                    + ";\n\t! время задачи (" + Journal.getDefEventDayTime().format(Time.H_MM) + ") назначено по умолчанию.");
+                    + ";\n\t! время задачи (" + Journal.getEventDayDefTime().format(Time.H_MM) + ") назначено по умолчанию.");
 
         LocalDateTime dateTime = LocalDateTime.of(date, time);
         if (dateTime.isBefore(LocalDateTime.now()))
@@ -250,10 +333,6 @@ public class Task {
         return time;
     }
 
-    public final void setDefaultTime() {
-        setTime(Journal.getDefEventDayTime());
-    }
-
     public final void setTime(LocalTime time) {
         if (this.date == null && time == null)
             return;
@@ -261,18 +340,84 @@ public class Task {
         if (this.date == null)
             this.date = LocalDate.now();
 
-        if (time == null)
+        if (time == null) {
             useDefEventTime();
-        else this.time = time;
+        } else {
+            this.time = time;
+            defEventTimeUsing = false;
+        }
     }
 
-    public final boolean isDefEventTimeUsed() {
+    public final void setDefaultTime() {
+        setTime(Journal.getEventDayDefTime());
+    }
+
+    public final boolean defEventTimeUsed() {
         return defEventTimeUsing;
     }
 
     public final void useDefEventTime() {
-        this.time = Journal.getDefEventDayTime();
+        this.time = Journal.getEventDayDefTime();
         defEventTimeUsing = true;
+    }
+
+    public final RepeatMode getRepeatMode() {
+        if (repeatMode == null)
+            setRepeatMode();
+
+        return repeatMode;
+    }
+
+    public final void setRepeatMode() {
+        setRepeatMode(null);
+    }
+
+    public final void setRepeatMode(RepeatMode repeatMode) {
+        setRepeatMode(repeatMode, null, null);
+    }
+
+    public final void setRepeatMode(RepeatMode repeatMode, Period period, LocalDateTime endRepeatTime) {
+        this.repeatMode = repeatMode == null ? RepeatMode.OFF : repeatMode;
+        setPeriod(period);
+        this.endRepeatTime = endRepeatTime;
+    }
+
+    public Period getPeriod() {
+        if (period == null)
+            setPeriod();
+
+        return period;
+    }
+
+    public final void setPeriod() {
+        setPeriod(null);
+    }
+
+    public final void setPeriod(Period period) {
+        switch (this.repeatMode) {
+            case SINGLE:
+                if (period != null)
+                    this.period = period;
+                else {
+                    this.period = new Period();
+                    this.repeatMode = RepeatMode.OFF;
+                }
+                break;
+            case DAILY:
+                this.period = Period.DAY;
+                break;
+            case WEEKLY:
+                this.period = Period.WEEK;
+                break;
+            case MONTHLY:
+                this.period = Period.MONTH;
+                break;
+            case YEARLY:
+                this.period = Period.YEAR;
+                break;
+            default:
+                this.period = new Period();
+        }
     }
 
     public final String getDescription() {
@@ -297,12 +442,11 @@ public class Task {
         if (date == null)
             this.status = Status.ACTUAL;
 
-        if (date != null)
-            if (LocalDateTime.of(date, time).isBefore(LocalDateTime.now()))
-                this.status = Status.EXPIRED;
-            else this.status = Status.TEMPORARY;
+        else if (LocalDateTime.of(date, time).isBefore(LocalDateTime.now()))
+            this.status = Status.EXPIRED;
+        else this.status = Status.TEMPORARY;
 
-        if (isRepeated)
+        if (repeatMode != RepeatMode.OFF)
             this.status = Status.REPEATED;
     }
 
@@ -355,9 +499,11 @@ public class Task {
         }
 
         string.append("состояние: ").append(getStatus().getTitle());
-        string.append(")");
 
-        return string.toString();
+        if (getRepeatMode() != RepeatMode.OFF)
+            string.append(" ").append(getRepeatMode().title.toLowerCase());
+
+        return string.append(")").toString();
     }
 
     public final boolean idEquals(Task task) {

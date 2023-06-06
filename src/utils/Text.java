@@ -13,7 +13,7 @@ public class Text {
 
     //  Quot
     public static String aquo(String string) {
-        return "«" + string + "»";
+        return Data.isCorrect(string) ? "«" + string + "»" : "";
     }
 
     //  Work with Letters and Words

@@ -94,21 +94,21 @@ public class Request {
     }
 
     public static LocalTime time(String ask) {
-        String timeString = null;
+        String requestString = null;
         LocalTime time = null;
         while (time == null) {
             try {
-                timeString = string(ask);
-                if (!Data.isCorrect(timeString) || timeString.equals("0"))
+                requestString = string(ask);
+                if (!Data.isCorrect(requestString) || requestString.equals("0"))
                     return null;
 
-                time = LocalTime.parse(timeString, Time.H_MM);
+                time = LocalTime.parse(requestString, Time.H_MM);
 
             } catch (Exception e) {
-                if (!Data.isCorrect(timeString))
+                if (!Data.isCorrect(requestString))
                     return null;
                 try {
-                    time = LocalTime.parse(timeString, Time.HH_MM);
+                    time = LocalTime.parse(requestString, Time.HH_MM);
                 } catch (Exception ex) {
                     Text.print(1, INCORRECT_VALUE);
                 }
@@ -136,15 +136,15 @@ public class Request {
     }
 
     public static LocalDate date(String ask) {
-        String dateString = null;
+        String requestString = null;
         LocalDate date = null;
         while (date == null) {
             final String YEAR_UoM = Data.isCorrect(Time.YEAR_UoM) ? " " + Time.YEAR_UoM : "";
             try {
-                dateString = string(ask);
-                if (!Data.isCorrect(dateString) || dateString.equals("0"))
+                requestString = string(ask);
+                if (!Data.isCorrect(requestString) || requestString.equals("0"))
                     return null;
-                switch (dateString.toLowerCase()) {
+                switch (requestString.toLowerCase()) {
                     case "позавчера":
                         return LocalDate.now().minusDays(2);
                     case "вчера":
@@ -157,13 +157,13 @@ public class Request {
                         return LocalDate.now().plusDays(2);
                 }
 
-                date = LocalDate.parse(dateString + YEAR_UoM, Time.D_MM_YYYY);
+                date = LocalDate.parse(requestString + YEAR_UoM, Time.D_MM_YYYY);
 
             } catch (Exception e) {
-                if (!Data.isCorrect(dateString))
+                if (!Data.isCorrect(requestString))
                     return null;
                 try {
-                    date = LocalDate.parse(dateString + YEAR_UoM, Time.DD_MM_YYYY);
+                    date = LocalDate.parse(requestString + YEAR_UoM, Time.DD_MM_YYYY);
                 } catch (Exception ex) {
                     Text.print(1, INCORRECT_VALUE);
                 }

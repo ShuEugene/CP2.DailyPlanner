@@ -37,13 +37,14 @@ public abstract class Commands {
         ADD("Добавить задачу"),
         EDIT("Поправить задачу"),
         REN("Переименовать", "Rename"),
-        CHANGET("Сменить Тип", "Change type"),
-        EDDATE("Изменить День напоминания", "Edit date"),
-        EDTIME("Изменить Время напоминания", "Edit time"),
-        EDDESCR("Изменить Описание", "Edit description"),
+        CHANGET("Сменить Тип", "Change Type"),
+        EDDATE("Изменить День напоминания", "Edit Date"),
+        EDTIME("Изменить Время напоминания", "Edit Time"),
+        EDREP("Изменить Повторяемость", "Edit Repeatability"),
+        EDDESCR("Изменить Описание", "Edit Description"),
         DELETE("Удалить задачу"),
-        SHOW("Показать задачи", "Show tasks"),
-        SHOWTI("Cведения по задаче", "Show task info"),
+        SHOW("Показать задачи", "Show Tasks"),
+        SHOWTI("Cведения по задаче", "Show task Info"),
         TEST("Создать тестовые экземпляры задач"),
         CANCEL(CANCEL_);
 
@@ -107,6 +108,7 @@ public abstract class Commands {
                     case REN:
                     case EDDATE:
                     case EDTIME:
+                    case EDREP:
                     case EDDESCR:
                     case DELETE:
                         if (!Data.isCorrect(Journal.tempJournal(Journal.showMode(), Journal.targetDay()))) {
@@ -135,9 +137,14 @@ public abstract class Commands {
                         break;
                     case EDDATE:
                         operated = Journal.editTaskDate(operated);
+                        operated.setStatus();
                         break;
                     case EDTIME:
                         operated = Journal.editTaskDayTime(operated);
+                        break;
+                    case EDREP:
+                        Journal.changeTaskRepeat(operated);
+                        operated.setStatus();
                         break;
                     case EDDESCR:
                         Journal.editTaskDescr(operated);
