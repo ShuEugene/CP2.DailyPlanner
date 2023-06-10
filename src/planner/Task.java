@@ -199,12 +199,13 @@ public class Task {
     private final LocalDateTime creationTime = LocalDateTime.now();
     private final int id;
     private int ordinal;
-    private LocalDate date;
-    private LocalTime time;
+    private LocalDateTime startDateTime, endDateTime;
+    private LocalDate startDate;
+    private LocalTime startTime;
     private boolean defEventTimeUsing = false;
     private RepeatMode repeatMode = RepeatMode.OFF;
     private Period period;
-    private LocalDateTime endRepeatTime;
+    private Set<LocalDateTime> repeats = new HashSet<>();
     private String description;
     private Status status;
 
@@ -218,55 +219,61 @@ public class Task {
         this(title, null, null, description);
     }
 
-    public Task(String title, LocalDate date) throws CommandException {
-        this(title, date, null, null);
+    public Task(String title, LocalDate startDate) throws CommandException {
+        this(title, startDate, null, null);
     }
 
-    public Task(String title, LocalTime time) throws CommandException {
-        this(title, null, time, null);
+    public Task(String title, LocalTime startTime) throws CommandException {
+        this(title, null, startTime, null);
     }
 
     public Task(String title, Type type) throws CommandException {
         this(title, type, null, null, null);
     }
 
-    public Task(String title, LocalTime time, String description) throws CommandException {
-        this(title, null, time, description);
+    public Task(String title, LocalTime startTime, String description) throws CommandException {
+        this(title, null, startTime, description);
     }
 
-    public Task(String title, LocalDate date, String description) throws CommandException {
-        this(title, date, null, description);
+    public Task(String title, LocalDate startDate, String description) throws CommandException {
+        this(title, startDate, null, description);
     }
 
-    public Task(String title, LocalDate date, LocalTime time) throws CommandException {
-        this(title, date, time, null);
+    public Task(String title, LocalDate startDate, LocalTime startTime) throws CommandException {
+        this(title, startDate, startTime, null);
     }
 
-    public Task(String title, Type type, LocalDate date, LocalTime time) throws CommandException {
-        this(title, type, date, time, null);
+    public Task(String title, Type type, LocalDate startDate, LocalTime startTime) throws CommandException {
+        this(title, type, startDate, startTime, null);
     }
 
-    public Task(String title, LocalDate date, LocalTime time, String description) throws CommandException {
-        this(title, null, date, time, description);
+    public Task(String title, LocalDate startDate, LocalTime startTime, String description) throws CommandException {
+        this(title, null, startDate, startTime, description);
     }
 
-    public Task(String title, Type type, LocalDate date, LocalTime time, String description) throws CommandException {
-        this(title, type, date, time, null, description);
+    public Task(String title, Type type, LocalDate startDate, LocalTime startTime, String description) throws CommandException {
+        this(title, type, startDate, startTime, null, description);
     }
 
-    public Task(String title, Type type, LocalDate date, LocalTime time, RepeatMode repeatMode, String description) throws CommandException {
-        this(title, type, date, time, repeatMode, null, null, description);
+    public Task(String title, Type type, LocalDate startDate, LocalTime startTime, RepeatMode repeatMode, String description) throws CommandException {
+        this(title, type, startDate, startTime, repeatMode, null, null, description);
     }
 
-    public Task(String title, Type type, LocalDate date, LocalTime time,
+    public Task(String title, Type type, LocalDateTime startDateTime,
+                RepeatMode repeatMode, Period period, LocalDateTime endRepeatTime, String description) throws CommandException {
+        this(title, type, startDateTime == null ? null : startDateTime.toLocalDate(),
+                startDateTime == null ? null : startDateTime.toLocalTime(), repeatMode, period, endRepeatTime, description);
+    }
+
+    public Task(String title, Type type, LocalDate startDate, LocalTime startTime,
                 RepeatMode repeatMode, Period period, LocalDateTime endRepeatTime, String description) throws CommandException {
         if (!Data.isCorrect(title))
             throw new CommandException(Commands.CommandException.UNTITLED_TASK_);
 
         setTitle(title);
         setType(type);
-        setDate(date);
-        setTime(time);
+        setStartDate(startDate);
+        setStartTime(startTime);
         setRepeatMode(repeatMode, period, endRepeatTime);
         this.id = hashCode();
         setStatus();
@@ -275,27 +282,73 @@ public class Task {
     /*  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  */
 
 
+    public final void update() {
+        LocalDateTime startDT = getStartDateTime(), endDT = getEndDateTime();
+        if (startDT != null && startDT.isBefore(LocalDateTime.now())) {
+            if (endDT == null)
+                setRepeatMode(RepeatMode.OFF);
+            setStatus(); ?здесь или ниже?
+
+            if (getRepeatMode() != RepeatMode.OFF) {
+                if (getRepeatMode() == RepeatMode.SINGLE) {
+                    try {
+                        newInstance = new Task(current.getTitle(), current.getType(), current.getEndDateTime(),
+                                RepeatMode.OFF, null, null, current.getDescription());
+                    } catch (CommandException e) {
+                        allTasks.remove(current.getId());
+                        temporaryTasks.remove(current.getId());
+                        break checkStart;
+                    }
+                    allTasks.put(newInstance.getId(), newInstance);
+                    checked.add(newInstance.getId());
+                    break checkStart;
+
+                } else {
+                    duration = current.getPeriod().getDuration();
+                    chronoUnit = current.getPeriod().getType();
+
+                    newStartDT = curTaskDateTime.plus(duration, chronoUnit);
+                    if (newStartDT.isBefore(current.getEndDateTime())) {
+                        newEndDT = newStartDT.plus(duration, chronoUnit);
+                        if (newEndDT.isAfter(current.getEndDateTime()))
+                            newEndDT = current.getEndDateTime();
+                    } else
+                        newEndDT = null;
+
+                    try {
+                        newInstance = new Task(current.getTitle(), current.getType(), newStartDT,
+                                newEndDT == null ? RepeatMode.OFF : current.getRepeatMode(),
+                                current.getPeriod(), newEndDT, current.getDescription());
+                    } catch (CommandException e) {
+                        allTasks.remove(current.getId());
+                        temporaryTasks.remove(current.getId());
+                        break checkStart;
+                    }
+
+                    allTasks.put(newInstance.getId(), newInstance);
+                    break checkStart;
+                }
+            }
+        }
+    }
+
     public final boolean alreadyExist() {
         return Journal.getJournal().containsKey(getId());
     }
 
     public void checkTime() {
-        if (date == null)
+        if (startDate == null)
             return;
 
         if (defEventTimeUsed())
-            System.out.println("\n! Задача " + Text.aquo(getTitle()) + " назначена на " + this.date.format(Time.D_MMM_YYYY)
+            System.out.println("\n! Задача " + Text.aquo(getTitle()) + " назначена на " + this.startDate.format(Time.D_MMM_YYYY)
                     + ";\n\t! время задачи (" + Journal.getEventDayDefTime().format(Time.H_MM) + ") назначено по умолчанию.");
 
-        LocalDateTime dateTime = LocalDateTime.of(date, time);
+        LocalDateTime dateTime = LocalDateTime.of(startDate, startTime);
         if (dateTime.isBefore(LocalDateTime.now()))
             System.out.println("\n! Внимание:\n\tдля задачи " + Text.aquo(getTitle()) + " назначено уже прошедшее время - " + dateTime.format(Time.D_MMM_YYYY_H_MM) + ".");
     }
 
-
-    public final LocalDateTime getCreationTime() {
-        return creationTime;
-    }
 
     public final String getTitle() {
         if (title == null)
@@ -311,45 +364,31 @@ public class Task {
         this.title = title;
     }
 
-    public final int getId() {
-        return id;
+    public final Type getType() {
+        return type;
     }
 
-    public final LocalDateTime getDateTime() {
-        return (date == null || time == null) ? null : LocalDateTime.of(date, time);
+    public void setType(Type type) {
+        if (type != null)
+            this.type = type;
+        else if (this.type == null)
+            this.type = Type.PERSONAL;
     }
 
-    public final LocalDate getDate() {
-        return date;
+    public final LocalDateTime getCreationTime() {
+        return creationTime;
     }
 
-    public final void setDate(LocalDate date) {
-        this.date = date;
-        if (date == null && this.time != null)
-            this.time = null;
+    public final LocalDate getStartDate() {
+        return startDate;
     }
 
-    public final LocalTime getTime() {
-        return time;
-    }
+    public final void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+        if (startDate == null && this.startTime != null)
+            this.startTime = null;
 
-    public final void setTime(LocalTime time) {
-        if (this.date == null && time == null)
-            return;
-
-        if (this.date == null)
-            this.date = LocalDate.now();
-
-        if (time == null) {
-            useDefEventTime();
-        } else {
-            this.time = time;
-            defEventTimeUsing = false;
-        }
-    }
-
-    public final void setDefaultTime() {
-        setTime(Journal.getEventDayDefTime());
+        setStartDateTime();
     }
 
     public final boolean defEventTimeUsed() {
@@ -357,8 +396,45 @@ public class Task {
     }
 
     public final void useDefEventTime() {
-        this.time = Journal.getEventDayDefTime();
+        this.startTime = Journal.getEventDayDefTime();
         defEventTimeUsing = true;
+    }
+
+    public final LocalTime getStartTime() {
+        return startTime;
+    }
+
+    public final void setStartTime(LocalTime time) {
+        if (this.startDate == null && time == null)
+            return;
+
+        if (this.startDate == null)
+            this.startDate = LocalDate.now();
+
+        if (time == null)
+            useDefEventTime();
+        else {
+            this.startTime = time;
+            defEventTimeUsing = false;
+        }
+
+        startDateTime = LocalDateTime.of(startDate, startTime);
+    }
+
+    public final void setDefaultTime() {
+        setStartTime(Journal.getEventDayDefTime());
+    }
+
+    public final LocalDateTime getStartDateTime() {
+        return (startDate == null || startTime == null) ? null : LocalDateTime.of(startDate, startTime);
+    }
+
+    public final void setStartDateTime() {
+        startDateTime = startDate == null || startTime == null ? null : LocalDateTime.of(startDate, startTime);
+    }
+
+    public final int getId() {
+        return id;
     }
 
     public final RepeatMode getRepeatMode() {
@@ -376,10 +452,15 @@ public class Task {
         setRepeatMode(repeatMode, null, null);
     }
 
-    public final void setRepeatMode(RepeatMode repeatMode, Period period, LocalDateTime endRepeatTime) {
-        this.repeatMode = repeatMode == null ? RepeatMode.OFF : repeatMode;
+    public final void setRepeatMode(RepeatMode repeatMode, Period period, LocalDateTime endTime) {
+        if (this.repeatMode == null)
+            this.repeatMode = repeatMode == null ? RepeatMode.OFF : repeatMode;
+
+        else if (repeatMode == null)
+            return;
+
         setPeriod(period);
-        this.endRepeatTime = endRepeatTime;
+        this.endDateTime = endTime;
     }
 
     public Period getPeriod() {
@@ -399,7 +480,7 @@ public class Task {
                 if (period != null)
                     this.period = period;
                 else {
-                    this.period = new Period();
+                    this.period = Period.NULL;
                     this.repeatMode = RepeatMode.OFF;
                 }
                 break;
@@ -416,8 +497,18 @@ public class Task {
                 this.period = Period.YEAR;
                 break;
             default:
-                this.period = new Period();
+                this.period = Period.NULL;
         }
+    }
+
+    public LocalDateTime getEndDateTime() {
+        return endDateTime;
+    }
+
+    public void setEndDateTime(LocalDateTime endDateTime) {
+        this.endDateTime = endDateTime;
+        if (this.endDateTime == null)
+            setRepeatMode(RepeatMode.OFF);
     }
 
     public final String getDescription() {
@@ -439,10 +530,10 @@ public class Task {
     }
 
     public final void setStatus() {
-        if (date == null)
+        if (startDate == null)
             this.status = Status.ACTUAL;
 
-        else if (LocalDateTime.of(date, time).isBefore(LocalDateTime.now()))
+        else if (LocalDateTime.of(startDate, startTime).isBefore(LocalDateTime.now()))
             this.status = Status.EXPIRED;
         else this.status = Status.TEMPORARY;
 
@@ -462,27 +553,19 @@ public class Task {
         return Data.isCorrect(description) ? this + "\n\tОписание: " + description : this.toString();
     }
 
-    public final Type getType() {
-        return type;
-    }
-
-    public void setType(Type type) {
-        this.type = type == null ? Type.PERSONAL : type;
-    }
-
     @Override
     public final String toString() {
         StringBuilder string = new StringBuilder(Text.aquo(getTitle()));
         string.append(" (").append(getType()).append("; ");
 
-        if (this.date != null) {
-            string.append(this.date.format(Time.D_MMM_YYYY)).append(" ").append(this.time.format(Time.H_MM));
+        if (this.startDate != null) {
+            string.append(this.startDate.format(Time.D_MMM_YYYY)).append(" ").append(this.startTime.format(Time.H_MM));
 
             LocalDate today = LocalDate.now();
             LocalTime now = LocalTime.now();
 
-            if (this.date.isEqual(today) && this.time.isAfter(now)) {
-                Duration duration = Duration.between(LocalTime.now(), this.time);
+            if (this.startDate.isEqual(today) && this.startTime.isAfter(now)) {
+                Duration duration = Duration.between(LocalTime.now(), this.startTime);
                 if (!duration.isZero()) {
                     int hours = duration.toHoursPart(),
                             minutes = duration.toMinutesPart();
@@ -524,6 +607,6 @@ public class Task {
 
     @Override
     public int hashCode() {
-        return Objects.hash(getTitle().toLowerCase(), getDate(), getTime());
+        return Objects.hash(getTitle().toLowerCase(), getStartDate(), getStartTime());
     }
 }

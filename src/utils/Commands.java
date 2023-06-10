@@ -10,7 +10,7 @@ public abstract class Commands {
     public static class CommandException extends Exception {
 
         public static final String UNKNOWN_COMMAND_ = "С указанным действием не знаком.";
-        public static final String UNTITLED_TASK_ = "Заголовок задачи должен быть указан.";
+        public static final String UNTITLED_TASK_ = "Название (заголовок) задачи не указан.";
 
         public CommandException() {
         }
@@ -140,7 +140,7 @@ public abstract class Commands {
                         operated.setStatus();
                         break;
                     case EDTIME:
-                        operated = Journal.editTaskDayTime(operated);
+                        operated = Journal.editTaskTime(operated);
                         break;
                     case EDREP:
                         Journal.changeTaskRepeat(operated);

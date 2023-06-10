@@ -3,6 +3,7 @@ package utils;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Year;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class Request {
@@ -152,9 +153,52 @@ public class Request {
                     case "сегодня":
                         return LocalDate.now();
                     case "завтра":
+                    case "через день":
+                    case "спустя день":
                         return LocalDate.now().plusDays(1);
                     case "послезавтра":
+                    case "через два дня":
+                    case "спустя два дня":
                         return LocalDate.now().plusDays(2);
+                    case "через три дня":
+                    case "спустя три дня":
+                        return LocalDate.now().plusDays(3);
+                    case "через четыре дня":
+                    case "спустя четыре дня":
+                        return LocalDate.now().plusDays(4);
+                    case "через пять дней":
+                    case "спустя пять дней":
+                        return LocalDate.now().plusDays(5);
+                    case "через шесть дней":
+                    case "спустя шесть дней":
+                        return LocalDate.now().plusDays(6);
+                    case "через семь дней":
+                    case "через неделю":
+                    case "спустя семь дней":
+                    case "спустя неделю":
+                        return LocalDate.now().plus(1, ChronoUnit.WEEKS);
+                    case "через две недели":
+                    case "спустя две недели":
+                        return LocalDate.now().plus(2, ChronoUnit.WEEKS);
+                    case "через три недели":
+                    case "спустя три недели":
+                        return LocalDate.now().plus(4, ChronoUnit.WEEKS);
+                    case "через четыре недели":
+                    case "спустя четыре недели":
+                    case "через месяц":
+                    case "спустя месяц":
+                        return LocalDate.now().plus(1, ChronoUnit.MONTHS);
+                    case "через два месяца":
+                    case "спустя два месяца":
+                        return LocalDate.now().plus(2, ChronoUnit.MONTHS);
+                    case "через три месяца":
+                    case "спустя три месяца":
+                    case "через квартал":
+                    case "спустя квартал":
+                        return LocalDate.now().plus(3, ChronoUnit.MONTHS);
+                    case "через год":
+                    case "спустя год":
+                        return LocalDate.now().plus(1, ChronoUnit.YEARS);
                 }
 
                 date = LocalDate.parse(requestString + YEAR_UoM, Time.D_MM_YYYY);

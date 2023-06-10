@@ -1,33 +1,27 @@
 package utils;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
 
-import static utils.Period.Type.*;
+import static java.time.temporal.ChronoUnit.*;
 
 public class Period {
 
-    public enum Type {YEARS, MONTHS, DAYS, UNITS, HOURS, MINUTES;}
-
-    public final static Period NULL = new Period(0, UNITS);
+    public final static Period NULL = new Period(0, null);
     public final static Period MINUTE = new Period(1, MINUTES);
     public final static Period HOUR = new Period(1, HOURS);
     public final static Period DAY = new Period(1, DAYS);
-    public final static Period WEEK = new Period(7, DAYS);
+    public final static Period WEEK = new Period(1, WEEKS);
     public final static Period MONTH = new Period(1, MONTHS);
     public final static Period YEAR = new Period(1, YEARS);
 
-    private final Type type;
+    private final ChronoUnit type;
     private final long duration;
 
 
-    public Period() {
-        this(0, null);
-    }
-
-    public Period(Type type) {
+//  ?использованы
+    public Period(ChronoUnit type) {
         this(0, type);
     }
 
@@ -35,8 +29,8 @@ public class Period {
         this(duration, null);
     }
 
-    public Period(long duration, Type type) {
-        this.type = type == null ? UNITS : type;
+    public Period(long duration, ChronoUnit type) {
+        this.type = type;
         this.duration = Math.abs(duration);
     }
 
@@ -45,13 +39,13 @@ public class Period {
             this.type = MINUTES;
             this.duration = Math.abs(endTime.toEpochSecond(ZoneOffset.UTC) - initialTime.toEpochSecond(ZoneOffset.UTC)) / 60;
         } else {
-            this.type = UNITS;
+            this.type = null;
             this.duration = 0;
         }
     }
 
 
-    public Type getType() {
+    public ChronoUnit getType() {
         return type;
     }
 

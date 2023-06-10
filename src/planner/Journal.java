@@ -1,9 +1,9 @@
 package planner;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -43,6 +43,23 @@ public abstract class Journal {
         private static RepeatMode repeatMode = null;
         private static Period period = null;
         private static Task.Status status = null;
+
+        public static void clone(Task cloned) {
+            if (cloned == null) {
+                System.out.println("Задача для клонирования не указана;" +
+                        "\nподставная задача обнулена.");
+                reset();
+                return;
+            }
+            TempTask.title = cloned.getTitle();
+            TempTask.description = cloned.getDescription();
+            TempTask.type = cloned.getType();
+            TempTask.startTime = cloned.getStartDateTime();
+            TempTask.endTime = cloned.getEndDateTime();
+            TempTask.repeatMode = cloned.getRepeatMode();
+            TempTask.period = cloned.getPeriod();
+            setStatus();
+        }
 
         public static void reset() {
             TempTask.title = "";
@@ -107,13 +124,17 @@ public abstract class Journal {
             return period;
         }
 
+        public static void setPeriod() {
+            setPeriod(null);
+        }
+
         public static void setPeriod(Period period) {
             switch (TempTask.repeatMode) {
                 case SINGLE:
                     if (period != null)
                         TempTask.period = period;
                     else {
-                        TempTask.period = new Period();
+                        TempTask.period = Period.NULL;
                         TempTask.repeatMode = RepeatMode.OFF;
                     }
                     break;
@@ -130,7 +151,7 @@ public abstract class Journal {
                     TempTask.period = Period.YEAR;
                     break;
                 default:
-                    TempTask.period = new Period();
+                    TempTask.period = Period.NULL;
             }
         }
 
@@ -170,8 +191,8 @@ public abstract class Journal {
         if (second == null)
             return 1;
 
-        LocalDateTime firstTime = first.getDateTime(),
-                secondTime = second.getDateTime();
+        LocalDateTime firstTime = first.getStartDateTime(),
+                secondTime = second.getStartDateTime();
 
         if (first.getStatus().getOrdinal() != second.getStatus().getOrdinal())
             return second.getStatus().getOrdinal() - first.getStatus().getOrdinal();
@@ -198,8 +219,8 @@ public abstract class Journal {
         if (second == null)
             return -1;
 
-        LocalDateTime firstTime = first.getDateTime(),
-                secondTime = second.getDateTime();
+        LocalDateTime firstTime = first.getStartDateTime(),
+                secondTime = second.getStartDateTime();
 
         if (first.getStatus().getOrdinal() != second.getStatus().getOrdinal())
             return first.getStatus().getOrdinal() - second.getStatus().getOrdinal();
@@ -242,6 +263,7 @@ public abstract class Journal {
         } while (requested.size() > 1);
 
         Task[] tasks = requested.values().toArray(new Task[0]);
+        tasks[0].update();
         System.out.println(tasks[0].getInfo() + ".");
     }
 
@@ -250,6 +272,8 @@ public abstract class Journal {
     }
 
     public static void show(SortMode sortMode) {
+        Journal.update();
+
         targetDay = Request.date(Request.ENTER_YEARDAY.substring(0, Request.ENTER_YEARDAY.length() - 1)
                 + Request.OR_CANCEL.replace("\n(", " ")
                 .replace("отмены", "отображения полного перечня задач"));
@@ -293,27 +317,69 @@ public abstract class Journal {
         } while (Request.confirm("\nПоказать задачи другого типа?"));
     }
 
-    public static void journalsUpdate() {
+    public static void update() {
         Map<Integer, Task> allTasks = getJournal();
         if (!Data.isCorrect(allTasks))
             return;
 
+        Task newInstance;
+        LocalDateTime newStartDT, newEndDT, curTaskDateTime;
+        long duration;
+        ChronoUnit chronoUnit;
+        Set<Integer> checked = new HashSet<>();
+
+        checkStart:
         for (Task current :
                 allTasks.values()) {
-            if (current != null) {
-                LocalDateTime curTaskDateTime = current.getDateTime();
+
+            if (current != null && !checked.contains(current.getId())) {
+                checked.add(current.getId());
+
+                curTaskDateTime = current.getStartDateTime();
                 if (curTaskDateTime != null && curTaskDateTime.isBefore(LocalDateTime.now())) {
+                    if (current.getEndDateTime() == null)
+                        current.setRepeatMode(RepeatMode.OFF);
                     current.setStatus();
-                    getTemporaryTasks().remove(current.getId());
-                    getArchiveTasks().put(current.getId(), current);
+
                     if (current.getRepeatMode() != RepeatMode.OFF) {
-                        LocalDate newInstanceDate;
-                        LocalTime newInstanceTime;
-                        switch (current.getRepeatMode()) {
-                            case SINGLE:
+                        if (current.getRepeatMode() == RepeatMode.SINGLE) {
+                            try {
+                                newInstance = new Task(current.getTitle(), current.getType(), current.getEndDateTime(),
+                                        RepeatMode.OFF, null, null, current.getDescription());
+                            } catch (CommandException e) {
+                                allTasks.remove(current.getId());
+                                temporaryTasks.remove(current.getId());
+                                break checkStart;
+                            }
+                            allTasks.put(newInstance.getId(), newInstance);
+                            checked.add(newInstance.getId());
+                            break checkStart;
+
+                        } else {
+                            duration = current.getPeriod().getDuration();
+                            chronoUnit = current.getPeriod().getType();
+
+                            newStartDT = curTaskDateTime.plus(duration, chronoUnit);
+                            if (newStartDT.isBefore(current.getEndDateTime())) {
+                                newEndDT = newStartDT.plus(duration, chronoUnit);
+                                if (newEndDT.isAfter(current.getEndDateTime()))
+                                    newEndDT = current.getEndDateTime();
+                            } else
+                                newEndDT = null;
+
+                            try {
+                                newInstance = new Task(current.getTitle(), current.getType(), newStartDT,
+                                        newEndDT == null ? RepeatMode.OFF : current.getRepeatMode(),
+                                        current.getPeriod(), newEndDT, current.getDescription());
+                            } catch (CommandException e) {
+                                allTasks.remove(current.getId());
+                                temporaryTasks.remove(current.getId());
+                                break checkStart;
+                            }
+
+                            allTasks.put(newInstance.getId(), newInstance);
+                            break checkStart;
                         }
-                        Task newInstance = new Task(current.getTitle(), current.getType(), current.getDate())
-                        getJournal().put()
                     }
                 }
             }
@@ -389,89 +455,65 @@ public abstract class Journal {
     }
 
 
-    public static void changeTaskType(Task edited) {
-        if (edited == null)
-            return;
-
-        Type newType = null;
-        String typeStr;
-        while (newType == null) {
-            Text.printList("\nВыберите новый тип задачи:" + Request.OR_CANCEL, Type.numList(), Text.PrintMode.SIMPLE);
-            typeStr = Request.string();
-            if (!Data.isCorrect(typeStr))
-                return;
-            newType = Type.get(typeStr);
-            if (newType == null)
-                System.out.println("Данный тип не знаком.");
-        }
-
-        tempJournal(edited.getType(), targetDay).remove(edited.getId());
-        edited.setType(newType);
-        tempJournal(newType, targetDay).put(edited.getId(), edited);
-    }
-
-    public static void changeTaskRepeat(Task edited) {
-        if (edited == null)
-            return;
-
-        System.out.println("Задача " + Text.aquo(edited.getTitle()) + " на данный момент "
-                + (edited.getRepeatMode() == RepeatMode.OFF ? "не имеет повторов"
-                : "повторяется " + edited.getRepeatMode()).toLowerCase() + ".");
-        RepeatMode newRepeatMode = null;
-        String string;
-
-        while (newRepeatMode == null) {
-            Text.printList("\nВыберите новый период повторения задачи:" + Request.OR_CANCEL, RepeatMode.numList(), Text.PrintMode.SIMPLE);
-            string = Request.string();
-            if (!Data.isCorrect(string))
-                return;
-            newRepeatMode = RepeatMode.get(string);
-            if (newRepeatMode == null)
-                System.out.println("Данный период не знаком.");
-            else switch (newRepeatMode) {
-                case OFF:
-                    System.out.println("Повторение напоминаний о задаче " + Text.aquo(edited.getTitle()) + " отключено.");
-                    break;
-                case SINGLE:...
-            }
-        }
-
-        edited.setRepeatMode(newRepeatMode);
-    }
-
-    public static void editTask() {
-        Task edited = requestTaskPointer(ENTER_THE_TASKPOINTER);
-        if (edited == null)
-            return;
-
-        ED_MENU.show(edited);
-    }
-
     public static void editTaskDescr(Task edited) {
         if (edited == null)
             return;
         edited.setDescription(Request.string("Введите новое описание:"));
     }
 
-    public static Task editTaskDayTime(Task edited) {
+    public static void changeTaskRepeat(Task edited) {
+        if (edited == null)
+            return;
+        System.out.println("Задача " + Text.aquo(edited.getTitle()) + " на данный момент "
+                + (edited.getRepeatMode() == RepeatMode.OFF ? "не имеет повторов"
+                : "повторяется " + edited.getRepeatMode()).toLowerCase() + ".");
+
+        TempTask.clone(edited);
+        edited.setRepeatMode(requestRepeatMode());
+    }
+
+    public static Task editTaskTime(Task edited) {
         if (edited == null)
             return null;
 
-        LocalDate oldDate = edited.getDate(),
-                newDate = oldDate != null ? oldDate :
-                        Request.confirm("День напоминания не назначен. Желаете назначить его самостоятельно?" +
-                                "\n(В случае отказа днём напоминания будет назначен сегодняшний день - "
-                                + LocalDate.now().format(Time.D_MM_YYYY) + ")") ?
-                                Request.date(Request.ENTER_YEARDAY.replaceFirst("день", "новый день напоминания"))
-                                : LocalDate.now();
-        if (newDate == null)
-            newDate = LocalDate.now();
+        LocalDate oldDate = edited.getStartDate(),
+                today = LocalDate.now(),
+                newDate = oldDate != null ? oldDate : //*в.1* Допускает возможность установления днём напоминания прошедший день (при необходимости отключить эту инициализацию и включить следующую (закомментированную))
+                        Request.confirm("День напоминания не назначен. Желаете назначить его самостоятельно?" + //*в.1
+                                "\n(В случае отказа днём напоминания будет назначен сегодняшний день - " //*в.1
+                                + LocalDate.now().format(Time.D_MM_YYYY) + ")") ? //*в.1
+                                Request.date(Request.ENTER_YEARDAY.replaceFirst("день", "новый день напоминания")) //*в.1
+                                : LocalDate.now(); //*в.1
+
+//  Исключает возможность назначения прошедшего дня днём напоминания (включить данное условие и отключить следующее за ним условие и вышестоящую инициализацию newDate)
+/*
+        if (oldDate != null)
+            newDate = oldDate;
+        else {
+            if (Request.confirm("День напоминания не назначен. Желаете назначить его самостоятельно?" +
+                    "\n(В случае отказа днём напоминания будет назначен сегодняшний день - "
+                    + LocalDate.now().format(Time.D_MM_YYYY) + ")")) {
+                do {
+                    newDate = Request.date(Request.ENTER_YEARDAY.replaceFirst("день", "новый день напоминания"));
+                    today = LocalDate.now();
+                    if (newDate == null)
+                        newDate = today;
+                    if (newDate.isBefore(today))
+                        System.out.println("Назначение прошедшего дня днём напоминания исключено.");
+                } while (newDate.isAfter(today) || newDate.isEqual(today));
+            } else
+                newDate = LocalDate.now();
+        }
+*/ //*в.2
+
+        if (newDate == null) //*в.1
+            newDate = LocalDate.now(); //*в.1
 
         LocalTime newDayTime = Request.time(Request.ENTER_DAYTIME.replace("время", "новое время напоминания")
                 + Request.OR_CANCEL);
         StringBuilder message = new StringBuilder("Время напоминания ");
-        LocalTime oldDayTime = edited.getTime();
-        LocalDateTime oldTime = edited.getDateTime();
+        LocalTime oldDayTime = edited.getStartTime();
+        LocalDateTime oldTime = edited.getStartDateTime();
         if (newDayTime == null) {
             if (oldDayTime == null)
                 message.append("не назначено.");
@@ -505,7 +547,7 @@ public abstract class Journal {
             return null;
         Task correctedTask = edited;
 
-        LocalDateTime oldTime = edited.getDateTime();
+        LocalDateTime oldTime = edited.getStartDateTime();
 
         LocalDate newDate = Request.date(Request.ENTER_YEARDAY.replaceFirst("календарный день", "новый день напоминания") +
                 Request.OR_CANCEL.replace("отмены", "его обнуления"));
@@ -517,7 +559,7 @@ public abstract class Journal {
             if (Request.confirm("Желаете изменить время напоминания:"))
                 newDayTime = Request.time(Request.ENTER_DAYTIME.replace("время", "новое время напоминания")
                         + Request.OR_CANCEL);
-            newTime = newDayTime == null ? LocalDateTime.of(newDate, edited.getTime()) : LocalDateTime.of(newDate, newDayTime);
+            newTime = newDayTime == null ? LocalDateTime.of(newDate, edited.getStartTime()) : LocalDateTime.of(newDate, newDayTime);
 
             Task firstMatch = firstMatch(edited, newTime);
             correctedTask = firstMatch != null && applyChanges(
@@ -551,6 +593,19 @@ public abstract class Journal {
         return correctedTask;
     }
 
+    public static void changeTaskType(Task edited) {
+        if (edited == null)
+            return;
+
+        Type newType = requestType();
+        if (newType == edited.getType())
+            return;
+
+        tempJournal(edited.getType(), targetDay).remove(edited.getId());
+        edited.setType(newType);
+        tempJournal(newType, targetDay).put(edited.getId(), edited);
+    }
+
     public static Task renTask(Task renamed) {
         if (renamed == null)
             return null;
@@ -567,6 +622,14 @@ public abstract class Journal {
                         replaceTask(firstMatch, newTitle, renamed) : replaceTask(null, newTitle, renamed);
         System.out.println("Задача «" + renamed.getTitle() + "» переименована в «" + newTitle + "».");
         return newTask;
+    }
+
+    public static void editTask() {
+        Task edited = requestTaskPointer(ENTER_THE_TASKPOINTER);
+        if (edited == null)
+            return;
+
+        ED_MENU.show(edited);
     }
 
     private static boolean applyChanges(String message, Task oldTask, Task newTask, String ask) {
@@ -630,6 +693,13 @@ public abstract class Journal {
     }
 
     private static LocalDateTime requestDateTime() {
+        return requestDateTime(null);
+    }
+
+    private static LocalDateTime requestDateTime(String message) {
+        if (Data.isCorrect(message))
+            System.out.println(message);
+
         LocalDate date = null;
         while (date == null) {
             date = Request.date("Укажите, пожалуйста, день:\n(в формате: деньМесяца.номерМесяца.год)");
@@ -651,7 +721,7 @@ public abstract class Journal {
         String string;
         Type type = null;
         while (type == null) {
-            Text.printList("\nВыберите один из нижеуказанных типов создаваемой задачи:" +
+            Text.printList("\nВыберите один из нижеуказанных типов:" +
                             Request.OR_CANCEL.replace("отмены", "выбора типа по умолчанию - \"личная\")"),
                     Task.Type.numList(), Text.PrintMode.SIMPLE);
             string = Request.string();
@@ -682,29 +752,47 @@ public abstract class Journal {
                     case OFF:
                         break;
                     case SINGLE:
+                        if (TempTask.getStartTime() == null) {
+                            System.out.println("Время напоминания не указано. Повтор напоминаний отключён.");
+                            return RepeatMode.OFF;
+                        }
                         do {
-                            System.out.println("Сейчас следует указать день и время последнего напоминания.");
-                            taskDateTime = requestDateTime();
-                            if (taskDateTime == null) {
-                                System.out.println("Повторение напоминания " + Text.aquo(title) + "отменено, " +
-                                        "поскольку не был указан день повторения." +
-                                        "\n(Повторение задачи можно назначить далее посредством меню Правки задачи)");
-                                repeatMode = RepeatMode.OFF;
-                            } else {
-                                if (taskDateTime.isAfter(LocalDateTime.now()) && taskDateTime.isAfter(LocalDateTime.of(taskDate, taskTime))) {
-                                    period = new Period(LocalDateTime.of(taskDate, taskTime), taskDateTime);
-                                    endRepeatTime = taskDateTime.plusMinutes(period.getDuration());
-                                } else {
-                                    System.out.println("Возможность указать время повторения напоминания" +
-                                            " ранее времени напоминания либо текущего времени исключена.");
-                                    taskDateTime = null;
-                                }
+                            TempTask.setEndTime(requestDateTime("Сейчас следует указать день и время повторного напоминания."));
+
+                            if (TempTask.getEndTime() == null)
+                                return RepeatMode.OFF;
+
+                            else if (TempTask.getEndTime().isAfter(LocalDateTime.now())
+                                    && TempTask.getEndTime().isAfter(TempTask.getStartTime()))
+                                TempTask.setPeriod(new Period(TempTask.getStartTime(), TempTask.getEndTime()));
+
+                            else {
+                                System.out.println("Возможность указать время повторения напоминания" +
+                                        " ранее времени напоминания либо текущего времени исключена.");
+                                TempTask.setEndTime(null);
                             }
-                        } while (taskDateTime == null);
+                        } while (TempTask.getEndTime() == null);
                         break;
+
                     default:
-                        if (Request.confirm("Назначить день последнего повторения?"))
-                            endRepeatTime = requestDateTime();
+                        do {
+                            TempTask.setEndTime(requestDateTime("Когда остановить повторение напоминаний?" +
+                                    "\n(Если не указать конкретный день, я отключу повторение напоминаний.)"));
+                            if (TempTask.getEndTime() == null) {
+                                TempTask.setRepeatMode(RepeatMode.OFF);
+                                TempTask.setPeriod();
+                                TempTask.setEndTime(null);
+                                return RepeatMode.OFF;
+                            }
+                            if (TempTask.getEndTime().isAfter(LocalDateTime.now())
+                                    && TempTask.getEndTime().isAfter(TempTask.getStartTime()))
+                                TempTask.setPeriod();
+                            else {
+                                System.out.println("Возможность указать время Повторения напоминания" +
+                                        " ранее времени Напоминания либо текущего времени исключена.");
+                                TempTask.setEndTime(null);
+                            }
+                        } while (TempTask.getEndTime() == null);
                 }
         } while (repeatMode == null);
 
@@ -718,30 +806,34 @@ public abstract class Journal {
         if (!Data.isCorrect(TempTask.getTitle()))
             return;
 
+//      замена TempTask
+/*
+        Task newTask;
+        try {
+            newTask = new Task(Request.string("\nВведите название (заголовок) задачи:\n(или \"пустую строку\" - для отмены)"));
+        } catch (CommandException e) {
+            return;
+        }
+*/
+
         TempTask.setType(requestType());
 
         if (Request.confirm("Назначить день напоминания?"))
             TempTask.setStartTime(requestDateTime());
 
-        RepeatMode repeatMode = null;
-        Period period = null;
-        LocalDateTime endRepeatTime = null;
         if (TempTask.getStartTime() != null)
-            if (Request.confirm("Установить повторение напоминания по этой задаче?"))
+            if (Request.confirm("Установить повторение напоминания для этой задачи?"))
                 TempTask.setRepeatMode(requestRepeatMode());
         if (TempTask.getRepeatMode() == RepeatMode.OFF)
             System.out.println("Повторение напоминаний о задаче"
                     + (Data.isCorrect(TempTask.getTitle()) ? " " + Text.aquo(TempTask.getTitle()) : "") + " отключено.");
 
 
-        String description = null;
         if (Request.confirm("Желаете добавить описание задачи?"))
-            description = Request.string("Описание:");
+            TempTask.setDescription(Request.string("Описание:"));
 
-        LocalDate taskStartDate = TempTask.getStartTime() == null ? null : TempTask.getStartTime().toLocalDate();
-        LocalTime taskStartTime = TempTask.getStartTime() == null ? null : TempTask.getStartTime().toLocalTime();
         try {
-            newTask(new Task(TempTask.getTitle(), TempTask.getType(), taskStartDate, taskStartTime,
+            newTask(new Task(TempTask.getTitle(), TempTask.getType(), TempTask.getStartTime(),
                     TempTask.getRepeatMode(), TempTask.getPeriod(), TempTask.getEndTime(), TempTask.getDescription()));
         } catch (
                 CommandException e) {
@@ -781,7 +873,7 @@ public abstract class Journal {
             }
 
             if (newTask.getStatus() == TEMPORARY || newTask.getStatus() == REPEATED)
-                if (newTask.getDateTime().isBefore(LocalDateTime.now()))
+                if (newTask.getStartDateTime().isBefore(LocalDateTime.now()))
                     getArchiveTasks().put(newTask.getId(), newTask);
                 else
                     getTemporaryTasks().put(newTask.getId(), newTask);
@@ -821,12 +913,12 @@ public abstract class Journal {
     }
 
     private static Task replaceTask(Task replacing, String newDescription) {
-        return replaceTask(null, replacing.getTitle(), replacing.getType(), replacing, replacing.getDate(), replacing.getTime(), newDescription);
+        return replaceTask(null, replacing.getTitle(), replacing.getType(), replacing, replacing.getStartDate(), replacing.getStartTime(), newDescription);
     }
 
     //  используется?
     private static Task replaceTask(Task replaced, LocalTime newTime, Task replacing) {
-        return replaceTask(replaced, replacing.getTitle(), replacing.getType(), replacing, replacing.getDate(), newTime, replacing.getDescription());
+        return replaceTask(replaced, replacing.getTitle(), replacing.getType(), replacing, replacing.getStartDate(), newTime, replacing.getDescription());
     }
 
     private static Task replaceTask(Task replaced, LocalDateTime newTime, Task replacing) {
@@ -836,7 +928,7 @@ public abstract class Journal {
     }
 
     private static Task replaceTask(Task replaced, String newTitle, Task replacing) {
-        return replaceTask(replaced, newTitle, replacing.getType(), replacing, replacing.getDate(), replacing.getTime(), replacing.getDescription());
+        return replaceTask(replaced, newTitle, replacing.getType(), replacing, replacing.getStartDate(), replacing.getStartTime(), replacing.getDescription());
     }
 
     private static Task replaceTask(Task replaced, String newTitle, Type type, Task replacing,
@@ -850,7 +942,7 @@ public abstract class Journal {
         if (newDate == null)
             newDayTime = null;
         if (newDayTime == null && newDate != null)
-            newDayTime = replacing.getTime();
+            newDayTime = replacing.getStartTime();
 
         try {
             newTask = new Task(newTitle, type, newDate, newDayTime, newDescription);
@@ -888,7 +980,7 @@ public abstract class Journal {
                 if (!journalTask.getTitle().equalsIgnoreCase(compared.getTitle()))
                     continue;
 
-                journalTaskTime = journalTask.getDateTime();
+                journalTaskTime = journalTask.getStartDateTime();
                 if (journalTaskTime != null && journalTaskTime.isEqual(comparedTime))
                     return journalTask;
             }
@@ -903,7 +995,7 @@ public abstract class Journal {
         for (Task journalTask :
                 getJournal().values()) {
             if (journalTask != null && journalTask.getTitle().equalsIgnoreCase(comparedTitle)
-                    && journalTask.getDate().isEqual(compared.getDate()) && journalTask.getTime().equals(compared.getTime()))
+                    && journalTask.getStartDate().isEqual(compared.getStartDate()) && journalTask.getStartTime().equals(compared.getStartTime()))
                 return journalTask;
         }
 
@@ -1028,7 +1120,7 @@ public abstract class Journal {
         for (Task task :
                 journal.values()) {
             if (task != null) {
-                taskDate = task.getDate();
+                taskDate = task.getStartDate();
 //  ? проверка Дат Повторяемости
                 if (task.getRepeatMode() != RepeatMode.OFF) {
                     for (LocalDate checkDate = taskDate; ) {
@@ -1060,7 +1152,7 @@ public abstract class Journal {
         int count = 0;
         for (Task task :
                 journal.values()) {
-            if (task != null && task.getTime() == time)
+            if (task != null && task.getStartTime() == time)
                 requested.put(++count, task);
         }
 
